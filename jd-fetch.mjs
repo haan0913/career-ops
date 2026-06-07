@@ -68,8 +68,8 @@ function htmlToText(html) {
 
 function deriveMode({ location = "", remote = false, employmentType = "", extra = "" }) {
   const hay = `${location} ${employmentType} ${extra}`.toLowerCase();
-  if (remote || /\bremote\b|telecommute|work from home|\bwfh\b/.test(hay)) return "Remote";
   if (/\bhybrid\b/.test(hay)) return "Hybrid";
+  if (remote || /\bremote\b|telecommute|work from home|\bwfh\b/.test(hay)) return "Remote";
   if (location) return "Onsite";
   return "";
 }

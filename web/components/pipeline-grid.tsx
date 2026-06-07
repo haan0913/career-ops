@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { ExternalLink, MapPin, Loader2, X, Building2 } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  ExternalLink,
+  MapPin,
+  Loader2,
+  X,
+  Building2,
+  Search,
+  DollarSign,
+  Briefcase,
+  CalendarClock,
+} from "lucide-react";
 import { fetchJd, type JdResult } from "@/lib/jd";
 import { scoreRole } from "@/lib/actions";
 import { daysAgo, freshLabel, freshTone, workMode, modeTone, scoreTone, type Mode } from "@/lib/fresh";
@@ -15,17 +25,143 @@ export type CardJob = {
   source: string | null;
 };
 
+type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
+type AgeFilter = 0 | 7 | 30 | 90;
+
 export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   const [active, setActive] = useState<CardJob | null>(null);
+  const [q, setQ] = useState("");
+  const [mode, setMode] = useState<ModeFilter>("all");
+  const [maxAge, setMaxAge] = useState<AgeFilter>(0);
+
+  const filtered = useMemo(
+    () =>
+      jobs.filter((j) => {
+        if (q) {
+          const hay = `${j.title} ${j.company} ${j.location ?? ""}`.toLowerCase();
+          if (!hay.includes(q.toLowerCase())) return false;
+        }
+        if (mode !== "all" && workMode(`${j.location ?? ""} ${j.title}`) !== mode) return false;
+        if (maxAge) {
+          const d = daysAgo(j.posted);
+          if (d === null || d > maxAge) return false;
+        }
+        return true;
+      }),
+    [jobs, q, mode, maxAge],
+  );
+
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {jobs.map((j, i) => (
-          <JobCard key={i} job={j} onOpen={() => setActive(j)} />
-        ))}
-      </div>
+      <FilterBar
+        q={q}
+        setQ={setQ}
+        mode={mode}
+        setMode={setMode}
+        maxAge={maxAge}
+        setMaxAge={setMaxAge}
+        count={filtered.length}
+        total={jobs.length}
+      />
+
+      {filtered.length === 0 ? (
+        <div className="grid place-items-center rounded-xl border border-dashed border-white/[0.08] bg-zinc-900/20 p-12 text-sm text-zinc-500">
+          No roles match these filters.
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((j, i) => (
+            <JobCard key={`${j.url}-${i}`} job={j} onOpen={() => setActive(j)} />
+          ))}
+        </div>
+      )}
+
       {active && <JobDrawer job={active} onClose={() => setActive(null)} />}
     </>
+  );
+}
+
+function Segmented<T extends string | number>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { label: string; val: T }[];
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-0.5">
+      {options.map((o) => (
+        <button
+          key={String(o.val)}
+          onClick={() => onChange(o.val)}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            value === o.val ? "bg-white/[0.1] text-white shadow-sm" : "text-zinc-400 hover:text-white"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FilterBar({
+  q,
+  setQ,
+  mode,
+  setMode,
+  maxAge,
+  setMaxAge,
+  count,
+  total,
+}: {
+  q: string;
+  setQ: (v: string) => void;
+  mode: ModeFilter;
+  setMode: (v: ModeFilter) => void;
+  maxAge: AgeFilter;
+  setMaxAge: (v: AgeFilter) => void;
+  count: number;
+  total: number;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-2.5">
+      <div className="flex min-w-[200px] flex-1 items-center gap-2 px-1">
+        <Search className="size-4 shrink-0 text-zinc-500" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search roles or companies…"
+          className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
+        />
+      </div>
+      <Segmented<ModeFilter>
+        value={mode}
+        onChange={setMode}
+        options={[
+          { label: "All", val: "all" },
+          { label: "Remote", val: "Remote" },
+          { label: "Hybrid", val: "Hybrid" },
+          { label: "Onsite", val: "Onsite" },
+        ]}
+      />
+      <Segmented<AgeFilter>
+        value={maxAge}
+        onChange={setMaxAge}
+        options={[
+          { label: "Any", val: 0 },
+          { label: "≤7d", val: 7 },
+          { label: "≤30d", val: 30 },
+          { label: "≤90d", val: 90 },
+        ]}
+      />
+      <span className="ml-auto whitespace-nowrap pr-1 font-mono text-xs text-zinc-500">
+        {count}
+        <span className="text-zinc-600"> / {total}</span>
+      </span>
+    </div>
   );
 }
 
@@ -47,7 +183,7 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="group flex h-full flex-col gap-3 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-zinc-900/70"
+      className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-zinc-900/70 hover:shadow-lg hover:shadow-black/30"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums">
@@ -58,7 +194,9 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       </div>
 
       <div className="flex-1">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-100">{job.title}</h3>
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-white">
+          {job.title}
+        </h3>
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
           <Building2 className="size-3 shrink-0" />
           <span className="truncate">{job.company}</span>
@@ -73,6 +211,15 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
         {job.source && <span className="shrink-0 font-mono text-[10px] text-zinc-600">{job.source}</span>}
       </div>
     </button>
+  );
+}
+
+function MetaChip({ icon: Icon, label }: { icon: typeof DollarSign; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-zinc-300 ring-1 ring-inset ring-white/10">
+      <Icon className="size-3 text-zinc-500" />
+      {label}
+    </span>
   );
 }
 
@@ -113,6 +260,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
   const tone = freshTone(d);
   const loc = jd?.location || job.location || "";
   const mode = (workMode(`${loc} ${job.title}`) || (jd?.mode as Mode) || "") as Mode;
+  const hasMeta = !!(jd?.salary || jd?.employmentType || jd?.validThrough);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -182,8 +330,15 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
               <span className={`font-mono font-semibold ${scoreTone(score)}`}>{score}</span>
             )}
           </button>
-          {jd?.salary && <span className="ml-auto font-mono text-xs text-zinc-400">{jd.salary}</span>}
         </div>
+
+        {hasMeta && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] px-5 py-2.5">
+            {jd?.salary && <MetaChip icon={DollarSign} label={jd.salary} />}
+            {jd?.employmentType && <MetaChip icon={Briefcase} label={jd.employmentType} />}
+            {jd?.validThrough && <MetaChip icon={CalendarClock} label={`apply by ${jd.validThrough}`} />}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (

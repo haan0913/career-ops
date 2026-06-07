@@ -35,8 +35,8 @@ export type Mode = "Remote" | "Hybrid" | "Onsite" | "";
 export function workMode(location?: string | null): Mode {
   const s = (location || "").toLowerCase();
   if (!s) return "";
+  if (/\bhybrid\b/.test(s)) return "Hybrid"; // "Hybrid (2 days remote)" → Hybrid
   if (/\bremote\b|telecommute|anywhere|\bwfh\b/.test(s)) return "Remote";
-  if (/\bhybrid\b/.test(s)) return "Hybrid";
   return "Onsite";
 }
 
