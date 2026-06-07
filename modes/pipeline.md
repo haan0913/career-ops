@@ -8,6 +8,7 @@ Process job URLs stored in `data/pipeline.md`. The user adds URLs at any time an
 2. **For each pending URL**:
    a. Calculate the next sequential `REPORT_NUM` (read `reports/`, take the highest number + 1)
    b. **Extract JD** using Playwright (browser_navigate + browser_snapshot) → WebFetch → WebSearch
+   b2. **(Optional) Triage pre-filter:** run `node match-score.mjs --jd "<extracted JD>"` (or `--json`) for a 0–100 local, zero-token match score + matched/missing keywords. Use it to **rank the queue** (evaluate highest-match first) and flag low-match roles. It is a cheap triage signal, NOT a substitute for the A–F evaluation.
    c. If the URL is not accessible → mark as `- [!]` with a note and continue
    d. **Execute full auto-pipeline**: Evaluation A-F → Report .md → PDF (if score >= 3.0) → Tracker
    e. **Move from "Pending" to "Processed"**: `- [x] #NNN | URL | Company | Role | Score/5 | PDF ✅/❌`

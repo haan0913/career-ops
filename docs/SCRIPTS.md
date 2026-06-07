@@ -18,6 +18,7 @@ All scripts live in the project root as `.mjs` modules and are exposed via `npm 
 | `npm run rollback` | `update-system.mjs rollback` | Rollback last update |
 | `npm run liveness` | `check-liveness.mjs` | Test if job URLs are still active |
 | `npm run scan` | `scan.mjs` | Zero-token portal scanner |
+| `npm run match` | `match-score.mjs` | Local JD↔CV match score (offline triage pre-filter) |
 
 ---
 
@@ -187,3 +188,21 @@ npm run scan
 ```
 
 **Exit codes:** `0` scan completed, `1` configuration error or no portals.yml found.
+
+---
+
+## match
+
+Local, zero-cost JD↔CV match score (0–100) + matched/missing keywords — a **triage pre-filter** to rank roles before the LLM A–F evaluation. Semantic similarity via `@huggingface/transformers` (`Xenova/all-MiniLM-L6-v2`, 384-dim, **fully offline**; downloads ~23 MB on first run, then cached) blended with keyword overlap (`0.6*semantic + 0.4*lexical`). Falls back to lexical-only if the model is unavailable.
+
+```bash
+npm run match -- jd.txt                  # score a JD file vs cv.md
+npm run match -- --jd "JD text..."       # inline JD text
+echo "JD text" | npm run match           # JD from stdin
+npm run match -- --cv resume.md jd.txt   # custom CV
+npm run match -- --json jd.txt           # machine-readable output
+```
+
+It is a **relative ranking signal, not a hiring verdict** — the A–F evaluation stays the judge, and it surfaces only keywords genuinely present in the CV (never invents metrics). Verified discrimination: an in-lane PMO/implementation JD scores ~71 vs an off-lane backend-engineer JD ~26.
+
+**Exit codes:** `0` scored, `1` missing CV or JD.

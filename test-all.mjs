@@ -137,6 +137,50 @@ try {
   fail(`Liveness classification tests crashed: ${e.message}`);
 }
 
+// ── 3b. PROVIDER & UTILITY UNIT TESTS ───────────────────────────
+
+console.log('\n3b. Provider & utility unit tests');
+
+const t = (cond, msg) => (cond ? pass(msg) : fail(msg));
+const imp = (f) => import(pathToFileURL(join(ROOT, f)).href);
+
+try {
+  const { parseWorkdayPostedOn } = await imp('providers/workday.mjs');
+  const now = new Date('2026-06-07T00:00:00Z');
+  t(parseWorkdayPostedOn('Posted Today', now) === '2026-06-07', 'workday postedOn: Today');
+  t(parseWorkdayPostedOn('Posted Yesterday', now) === '2026-06-06', 'workday postedOn: Yesterday');
+  t(parseWorkdayPostedOn('Posted 5 Days Ago', now) === '2026-06-02', 'workday postedOn: N days ago');
+  t(parseWorkdayPostedOn('Posted 30+ Days Ago', now) === '2026-05-08', 'workday postedOn: 30+ days');
+  t(parseWorkdayPostedOn('nonsense', now) === '', 'workday postedOn: unparseable → empty');
+} catch (e) { fail(`workday unit tests crashed: ${e.message}`); }
+
+try {
+  const { isJunkUrl, pickApplyUrl } = await imp('providers/jsearch.mjs');
+  t(isJunkUrl('https://2.halvolink.liveblog365.com/job/1') === true, 'jsearch: junk domain denylisted');
+  t(isJunkUrl('https://www.linkedin.com/jobs/view/x') === false, 'jsearch: real board kept');
+  t(pickApplyUrl({ job_apply_link: 'https://x.liveblog365.com/1' }) === null, 'jsearch: drop all-junk job');
+  t(pickApplyUrl({ job_apply_link: 'https://www.jobleads.com/x', apply_options: [{ apply_link: 'https://co.wd5.myworkdayjobs.com/x', is_direct: true }] }) === 'https://co.wd5.myworkdayjobs.com/x', 'jsearch: prefer direct employer link');
+  t(pickApplyUrl({ job_apply_link: 'https://www.linkedin.com/x', job_apply_is_direct: false }) === 'https://www.linkedin.com/x', 'jsearch: keep aggregator if only option');
+} catch (e) { fail(`jsearch unit tests crashed: ${e.message}`); }
+
+try {
+  const ms = await imp('match-score.mjs');
+  t(ms.cosine([1, 0], [1, 0]) === 1, 'match-score: cosine identical');
+  t(ms.cosine([1, 0], [0, 1]) === 0, 'match-score: cosine orthogonal');
+  t(Math.abs(ms.meanPool([[1, 0], [0, 1]])[0] - 0.70710678) < 1e-4, 'match-score: meanPool L2-normalize');
+  const ko = ms.keywordOverlap('python sql analyst', 'experienced python analyst');
+  t(ko.matched.slice().sort().join(',') === 'analyst,python' && ko.missing.join(',') === 'sql', 'match-score: keyword overlap');
+  t(ms.chunkWords('a b c d', 2).join('|') === 'a b|c d', 'match-score: chunkWords');
+} catch (e) { fail(`match-score unit tests crashed: ${e.message}`); }
+
+try {
+  const { extractJobPostingJsonLd } = await imp('liveness-jsonld.mjs');
+  const html = '<html><head><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Project Analyst","datePosted":"2026-06-01","validThrough":"2026-07-01","hiringOrganization":{"name":"Acme"}}</script></head><body>x</body></html>';
+  t(JSON.stringify(extractJobPostingJsonLd(html, 'https://acme.com/job/1') || {}).includes('2026-06-01'), 'jsonld: extracts datePosted');
+  const arr = '<script type="application/ld+json">[{"@type":"WebSite"},{"@type":"JobPosting","title":"X","datePosted":"2026-05-15","hiringOrganization":{"name":"Beta"}}]</script>';
+  t(JSON.stringify(extractJobPostingJsonLd(arr) || {}).includes('2026-05-15'), 'jsonld: handles array-wrapped JobPosting');
+} catch (e) { fail(`jsonld unit tests crashed: ${e.message}`); }
+
 // ── 4. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {

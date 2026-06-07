@@ -76,6 +76,10 @@
  *
  * @typedef {object} Provider
  * @property {string} id                                                       Unique across all loaded providers.
+ * @property {(1|2|3)} [tier]                                                   Source tier (default 1). 1=canonical
+ *                                                                              employer ATS (write direct); 2=aggregator;
+ *                                                                              3=scrape. scan.mjs liveness-gates Tier-2+
+ *                                                                              offers before the pipeline.
  * @property {((entry: PortalEntry) => (DetectHit | null))} [detect]           Optional auto-detection.
  * @property {(entry: PortalEntry, ctx: Context) => Promise<Job[]>} fetch      Required.
  */

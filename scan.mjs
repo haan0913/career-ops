@@ -25,6 +25,11 @@
  *   node scan.mjs --company Cohere # scan a single company
  *   node scan.mjs --verify         # Playwright-check each new URL; drop expired postings
  *   node scan.mjs --max-age-days 30 # drop postings older than 30 days (by posted date)
+ *   node scan.mjs --no-gate        # skip the Tier-2/3 liveness gate (write all unverified)
+ *
+ * Source tiers (source-tier doctrine): Tier-1 canonical employer-ATS offers write directly;
+ * Tier-2/3 (aggregator/scrape — a provider with `tier: 2`) are liveness-gated (Playwright +
+ * JSON-LD) before the pipeline by default. --verify gates ALL offers.
  *
  * Freshness: each provider returns a `posted` date (greenhouse first_published,
  * ashby publishedAt, lever createdAt). New offers are sorted newest-first and the
@@ -455,7 +460,7 @@ async function main() {
         seenCompanyRoles.add(key);
         // Source label keeps the `${provider.id}-api` suffix so existing
         // scan-history.tsv rows continue to match for dedup.
-        newOffers.push({ ...job, source: `${provider.id}-api` });
+        newOffers.push({ ...job, source: `${provider.id}-api`, tier: provider.tier || 1 });
       }
     } catch (err) {
       errors.push({ company: company.name, error: err.message });
@@ -479,18 +484,49 @@ async function main() {
   }
   newOffers.sort((a, b) => (b.posted || '').localeCompare(a.posted || ''));
 
-  // 5.5. Optional liveness verification — drop expired and guard-rejected postings
+  // 5.5. Liveness gate (source-tier doctrine). Tier-1 canonical employer-ATS offers are
+  // written directly; Tier-2/3 (aggregator/scrape) offers are gated through the liveness +
+  // JSON-LD check BEFORE the pipeline. --verify gates ALL offers; --no-gate disables gating.
+  const noGate = args.includes('--no-gate');
   let verifiedOffers = newOffers;
   let expiredOffers = [];
   let droppedOffers = [];
   let invalidOffers = [];
-  if (verify && newOffers.length > 0) {
-    console.log(`\nVerifying liveness of ${newOffers.length} new offer(s) with Playwright (sequential)...`);
-    const result = await verifyOffers(newOffers);
-    verifiedOffers = result.verified;
-    expiredOffers = result.expired;
-    droppedOffers = result.dropped;
-    invalidOffers = result.invalid;
+  let gatedCount = 0;
+
+  let toGate;
+  let passthrough;
+  if (noGate) {
+    toGate = [];
+    passthrough = newOffers;
+  } else if (verify) {
+    toGate = newOffers;
+    passthrough = [];
+  } else {
+    toGate = newOffers.filter((o) => (o.tier || 1) >= 2);
+    passthrough = newOffers.filter((o) => (o.tier || 1) < 2);
+  }
+  gatedCount = toGate.length;
+
+  if (toGate.length > 0) {
+    console.log(`\nVerifying liveness of ${toGate.length} ${verify ? 'new' : 'Tier-2+'} offer(s) with Playwright (sequential)...`);
+    try {
+      const result = await verifyOffers(toGate);
+      verifiedOffers = [...passthrough, ...result.verified];
+      expiredOffers = result.expired;
+      droppedOffers = result.dropped;
+      invalidOffers = result.invalid;
+    } catch (err) {
+      if (verify) throw err; // explicit --verify: surface the failure
+      // Auto-gate degraded (e.g. Playwright not installed). Don't fail the whole scan —
+      // write the Tier-2+ offers UNVERIFIED with a loud warning so the user can gate later.
+      console.error(`⚠️  liveness gate unavailable (${err.message.split('\n')[0]})`);
+      console.error(`   writing ${toGate.length} Tier-2+ offer(s) UNVERIFIED — run "node check-liveness.mjs <url>" before applying, or install Playwright (npx playwright install chromium).`);
+      verifiedOffers = newOffers;
+      gatedCount = 0;
+    }
+  } else {
+    verifiedOffers = passthrough;
   }
 
   // 6. Write results
@@ -532,10 +568,11 @@ async function main() {
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
   if (maxAgeDays !== null) console.log(`Filtered by age:       ${totalFilteredAge} removed (>${maxAgeDays}d old)`);
   console.log(`Duplicates:            ${totalDupes} skipped`);
-  if (verify) {
-    console.log(`Expired (verified):    ${expiredOffers.length} dropped`);
-    console.log(`No apply control:      ${droppedOffers.length} dropped`);
-    console.log(`Invalid (guarded):     ${invalidOffers.length} dropped`);
+  if (gatedCount > 0) {
+    console.log(`Liveness-gated:        ${gatedCount} ${verify ? '(all)' : '(Tier-2+)'}`);
+    console.log(`Expired (dropped):     ${expiredOffers.length}`);
+    console.log(`No apply control:      ${droppedOffers.length}`);
+    console.log(`Invalid (guarded):     ${invalidOffers.length}`);
   }
   console.log(`New offers added:      ${verifiedOffers.length}`);
 

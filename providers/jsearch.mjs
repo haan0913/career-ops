@@ -85,6 +85,9 @@ export { isJunkUrl, pickApplyUrl }; // exported for unit tests
 /** @type {Provider} */
 export default {
   id: 'jsearch',
+  // Tier 2 (aggregator over Google for Jobs). scan.mjs liveness-gates Tier-2+ offers
+  // before they reach the pipeline (source-tier doctrine).
+  tier: 2,
 
   // Routed only via an explicit `provider: jsearch`; no URL auto-detection.
   detect() {
