@@ -1,98 +1,130 @@
-import { syncAll } from "@/lib/sync";
-import { sqlite } from "@/db";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { sync, getStats, getPipeline, getApplications } from "@/lib/data";
+import {
+  StatCard,
+  Card,
+  SectionHeader,
+  FreshnessPill,
+  StatusBadge,
+  PageHeader,
+  EmptyState,
+} from "@/components/ui";
 import { ScanBar } from "@/components/scan-bar";
 import { MatchCell } from "@/components/match-cell";
 
-export const dynamic = "force-dynamic"; // re-read the md/TSV on every load
+export const dynamic = "force-dynamic";
 
-type App = { number: number; company: string; role: string; score: string; status: string };
-type Job = { url: string; company: string; title: string; posted: string };
-
-export default function Home() {
-  syncAll();
-  const apps = sqlite.prepare("SELECT * FROM applications ORDER BY number DESC").all() as App[];
-  const pending = sqlite
-    .prepare("SELECT * FROM jobs WHERE state='pending' ORDER BY (posted='') ASC, posted DESC")
-    .all() as Job[];
+export default function Overview() {
+  sync();
+  const s = getStats();
+  const fresh = getPipeline("pending").slice(0, 8);
+  const recent = getApplications().slice(0, 6);
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-100">
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">career-ops</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              {apps.length} applications · {pending.length} fresh in pipeline
-            </p>
-          </div>
-          <ScanBar />
-        </header>
+    <div className="animate-fadeUp">
+      <PageHeader title="Overview" subtitle="Your job search at a glance">
+        <ScanBar />
+      </PageHeader>
 
-        <section className="mb-10">
-          <h2 className="mb-3 text-lg font-semibold">Pipeline — fresh, newest first</h2>
-          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
-            {pending.length === 0 && (
-              <li className="p-4 text-sm text-zinc-500">No pending roles. Run a scan.</li>
-            )}
-            {pending.map((j, i) => (
-              <li key={i} className="flex items-center gap-4 p-3 text-sm">
-                <span className="w-24 shrink-0 tabular-nums text-zinc-400">{j.posted || "—"}</span>
-                <a href={j.url} target="_blank" rel="noreferrer" className="flex-1 truncate hover:underline">
-                  <span className="font-medium">{j.company}</span>
-                  <span className="text-zinc-500"> · {j.title}</span>
-                </a>
-                <span className="w-10 shrink-0 text-right">
-                  <MatchCell jd={`${j.company} ${j.title}`} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-lg font-semibold">Applications</h2>
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-            <table className="w-full text-sm">
-              <thead className="border-b border-zinc-200 text-left text-zinc-500 dark:border-zinc-800">
-                <tr>
-                  <th className="p-3 font-medium">#</th>
-                  <th className="p-3 font-medium">Company</th>
-                  <th className="p-3 font-medium">Role</th>
-                  <th className="p-3 font-medium">Score</th>
-                  <th className="p-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
-                {apps.map((a, i) => (
-                  <tr key={i}>
-                    <td className="p-3 tabular-nums text-zinc-400">{a.number}</td>
-                    <td className="p-3 font-medium">{a.company}</td>
-                    <td className="p-3">{a.role}</td>
-                    <td className="p-3 tabular-nums">{a.score}</td>
-                    <td className="p-3">
-                      <StatusBadge status={a.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Applications" value={s.totalApps} sub="tracked" />
+        <StatCard
+          label="In pipeline"
+          value={s.pending}
+          sub={`${s.freshWeek} fresh this week`}
+          accent="text-indigo-300"
+        />
+        <StatCard
+          label="Interviewing"
+          value={s.interviewing}
+          sub={`${s.offers} offer${s.offers === 1 ? "" : "s"}`}
+          accent="text-emerald-300"
+        />
+        <StatCard
+          label="Avg fit score"
+          value={s.avgScore != null ? s.avgScore.toFixed(1) : "—"}
+          sub="of evaluated roles"
+        />
       </div>
-    </main>
-  );
-}
 
-function StatusBadge({ status }: { status: string }) {
-  const s = (status || "").toLowerCase();
-  const color = s.includes("offer")
-    ? "bg-green-100 text-green-800"
-    : s.includes("interview") || s.includes("entrevista")
-      ? "bg-blue-100 text-blue-800"
-      : s.includes("applied") || s.includes("aplicado")
-        ? "bg-amber-100 text-amber-800"
-        : s.includes("reject") || s.includes("descart")
-          ? "bg-red-100 text-red-800"
-          : "bg-zinc-100 text-zinc-700";
-  return <span className={`inline-block rounded px-2 py-0.5 text-xs ${color}`}>{status || "—"}</span>;
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SectionHeader
+            title="Fresh roles"
+            action={
+              <Link
+                href="/pipeline"
+                className="inline-flex items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-white"
+              >
+                View all <ArrowUpRight className="size-3" />
+              </Link>
+            }
+          />
+          <Card>
+            {fresh.length === 0 ? (
+              <EmptyState>
+                No roles in the pipeline yet. Hit{" "}
+                <span className="mx-1 font-medium text-zinc-300">Run scan</span> to find some.
+              </EmptyState>
+            ) : (
+              <ul className="divide-y divide-white/[0.04]">
+                {fresh.map((j, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-white/[0.02]"
+                  >
+                    <span className="w-16 shrink-0">
+                      <FreshnessPill posted={j.posted} />
+                    </span>
+                    <a
+                      href={j.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 truncate text-sm hover:underline"
+                    >
+                      <span className="font-medium text-zinc-100">{j.company}</span>
+                      <span className="text-zinc-500"> · {j.title}</span>
+                    </a>
+                    <MatchCell jd={`${j.company} ${j.title}`} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div>
+          <SectionHeader
+            title="Recent applications"
+            action={
+              <Link href="/applications" className="text-xs text-zinc-400 transition-colors hover:text-white">
+                All
+              </Link>
+            }
+          />
+          <Card className="p-2">
+            {recent.length === 0 ? (
+              <EmptyState>No applications yet.</EmptyState>
+            ) : (
+              <ul className="space-y-1">
+                {recent.map((a, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-white/[0.02]"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-zinc-200">{a.company}</div>
+                      <div className="truncate text-xs text-zinc-500">{a.role}</div>
+                    </div>
+                    <StatusBadge status={a.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
