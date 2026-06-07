@@ -23,6 +23,8 @@ export type Job = {
   state: string;
   report_num: number | null;
   score: string | null;
+  location: string | null;
+  source: string | null;
 };
 
 // Re-read the md/TSV source of truth into the SQLite projection. Call ONCE per request.

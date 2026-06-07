@@ -29,3 +29,23 @@ export function scoreTone(score: number): string {
   if (score >= 45) return "text-amber-400";
   return "text-zinc-400";
 }
+
+export type Mode = "Remote" | "Hybrid" | "Onsite" | "";
+
+export function workMode(location?: string | null): Mode {
+  const s = (location || "").toLowerCase();
+  if (!s) return "";
+  if (/\bremote\b|telecommute|anywhere|\bwfh\b/.test(s)) return "Remote";
+  if (/\bhybrid\b/.test(s)) return "Hybrid";
+  return "Onsite";
+}
+
+export function modeTone(mode: Mode): string {
+  return mode === "Remote"
+    ? "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20"
+    : mode === "Hybrid"
+      ? "text-sky-400 bg-sky-500/10 ring-sky-500/20"
+      : mode === "Onsite"
+        ? "text-zinc-300 bg-white/[0.04] ring-white/10"
+        : "text-zinc-500 bg-white/[0.04] ring-white/10";
+}

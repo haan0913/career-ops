@@ -19,3 +19,12 @@ sqlite.exec(`
     state TEXT, report_num INTEGER, score TEXT
   );
 `);
+
+// Additive migrations — older projection files predate these columns.
+for (const col of ["location TEXT", "source TEXT"]) {
+  try {
+    sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);
+  } catch {
+    /* column already exists */
+  }
+}

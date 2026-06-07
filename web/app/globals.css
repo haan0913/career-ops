@@ -57,3 +57,79 @@ body {
 .animate-fadeUp {
   animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Rendered job-description HTML (sanitized server-side in jd-fetch.mjs) */
+.jd-prose {
+  color: #d4d4d8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.jd-prose h1,
+.jd-prose h2,
+.jd-prose h3,
+.jd-prose h4 {
+  color: #fff;
+  font-weight: 600;
+  margin: 1.3em 0 0.5em;
+  line-height: 1.3;
+}
+.jd-prose h1 {
+  font-size: 1.2rem;
+}
+.jd-prose h2 {
+  font-size: 1.05rem;
+}
+.jd-prose h3 {
+  font-size: 0.95rem;
+}
+.jd-prose p {
+  margin: 0.7em 0;
+}
+.jd-prose ul,
+.jd-prose ol {
+  margin: 0.7em 0;
+  padding-left: 1.4em;
+}
+.jd-prose ul {
+  list-style: disc;
+}
+.jd-prose ol {
+  list-style: decimal;
+}
+.jd-prose li {
+  margin: 0.3em 0;
+}
+.jd-prose a {
+  color: #818cf8;
+  text-decoration: underline;
+}
+.jd-prose strong,
+.jd-prose b {
+  color: #fff;
+  font-weight: 600;
+}
+.jd-prose hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 1.3em 0;
+}
+.jd-prose pre.jd-plain,
+pre.jd-plain {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #d4d4d8;
+}
