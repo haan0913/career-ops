@@ -1,5 +1,7 @@
 import { syncAll } from "@/lib/sync";
 import { sqlite } from "@/db";
+import { ScanBar } from "@/components/scan-bar";
+import { MatchCell } from "@/components/match-cell";
 
 export const dynamic = "force-dynamic"; // re-read the md/TSV on every load
 
@@ -16,11 +18,14 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-100">
       <div className="mx-auto max-w-5xl px-6 py-10">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight">career-ops</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {apps.length} applications · {pending.length} fresh in pipeline
-          </p>
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">career-ops</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              {apps.length} applications · {pending.length} fresh in pipeline
+            </p>
+          </div>
+          <ScanBar />
         </header>
 
         <section className="mb-10">
@@ -36,6 +41,9 @@ export default function Home() {
                   <span className="font-medium">{j.company}</span>
                   <span className="text-zinc-500"> · {j.title}</span>
                 </a>
+                <span className="w-10 shrink-0 text-right">
+                  <MatchCell jd={`${j.company} ${j.title}`} />
+                </span>
               </li>
             ))}
           </ul>
