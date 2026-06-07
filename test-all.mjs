@@ -65,9 +65,9 @@ console.log('\n2. Script execution (graceful on empty data)');
 const scripts = [
   { name: 'cv-sync-check.mjs', expectExit: 1, allowFail: true }, // fails without cv.md (normal in repo)
   { name: 'verify-pipeline.mjs', expectExit: 0 },
-  { name: 'normalize-statuses.mjs', expectExit: 0 },
-  { name: 'dedup-tracker.mjs', expectExit: 0 },
-  { name: 'merge-tracker.mjs', expectExit: 0 },
+  { name: 'normalize-statuses.mjs --dry-run', expectExit: 0 }, // --dry-run: tests must NOT mutate user data
+  { name: 'dedup-tracker.mjs --dry-run', expectExit: 0 },
+  { name: 'merge-tracker.mjs --dry-run', expectExit: 0 },
   { name: 'update-system.mjs check', expectExit: 0 },
 ];
 
