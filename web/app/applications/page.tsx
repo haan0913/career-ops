@@ -1,5 +1,6 @@
 import { sync, getApplications } from "@/lib/data";
-import { Card, StatusBadge, PageHeader, EmptyState } from "@/components/ui";
+import { Card, PageHeader, EmptyState } from "@/components/ui";
+import { StatusSelect } from "@/components/status-select";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default function Applications() {
                   <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-500">{a.date}</td>
                   <td className="px-4 py-2.5 text-right font-mono tabular-nums text-zinc-300">{a.score}</td>
                   <td className="px-4 py-2.5">
-                    <StatusBadge status={a.status} />
+                    <StatusSelect number={a.number} status={a.status} />
                   </td>
                 </tr>
               ))}

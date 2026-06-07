@@ -28,3 +28,20 @@ export async function scoreRole(jd: string): Promise<{ score: number; mode: stri
   });
   return JSON.parse(stdout.trim());
 }
+
+// Write-back: set an application's status. Spawns set-status.mjs so the engine owns
+// the (backup-safe, canonical-validated) mutation of applications.md.
+export async function setStatus(
+  number: number,
+  status: string,
+): Promise<{ ok: boolean; oldStatus?: string; newStatus?: string; error?: string }> {
+  try {
+    const { stdout } = await run("node", ["set-status.mjs", String(number), status], {
+      cwd: ROOT,
+      timeout: 15_000,
+    });
+    return JSON.parse(stdout.trim());
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
+  }
+}
