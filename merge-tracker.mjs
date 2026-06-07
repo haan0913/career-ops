@@ -6,6 +6,9 @@
  * - 9-col: num\tdate\tcompany\trole\tstatus\tscore\tpdf\treport\tnotes
  * - 8-col: num\tdate\tcompany\trole\tstatus\tscore\tpdf\treport (no notes)
  * - Pipe-delimited (markdown table row): | col | col | ... |
+ * Each .tsv file may contain MANY rows (one application per line) — every row is
+ * parsed and merged. Header rows and blank lines are skipped. Backward compatible:
+ * a single-row file still merges as one entry.
  *
  * Dedup: company normalized + role fuzzy match + report number match
  * If duplicate with higher score → update in-place, update report link
@@ -173,19 +176,41 @@ function parseAppLine(line) {
 }
 
 /**
- * Parse a TSV file content into a structured addition object.
+ * Parse a tracker-additions .tsv file into an ARRAY of additions.
+ * A file may hold many rows (one per line); each line is parsed independently.
+ * Blank lines and header rows (non-numeric first cell) are skipped quietly.
+ * Backward compatible: a single-row file yields a one-element array.
+ */
+function parseTsvFile(content, filename) {
+  const rows = [];
+  for (const raw of content.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    // First cell must be an entry number. Skip headers/garbage without warning.
+    const firstCell = line.startsWith('|')
+      ? (line.split('|').map(s => s.trim()).filter(Boolean)[0] || '')
+      : (line.split('\t')[0] || '');
+    if (!/^\d+$/.test(firstCell.replace(/\*\*/g, '').trim())) continue;
+    const row = parseTsvRow(line, filename);
+    if (row) rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Parse a single line into a structured addition object.
  * Handles: 9-col TSV, 8-col TSV, pipe-delimited markdown.
  */
-function parseTsvContent(content, filename) {
-  content = content.trim();
-  if (!content) return null;
+function parseTsvRow(line, filename) {
+  line = line.trim();
+  if (!line) return null;
 
   let parts;
   let addition;
 
   // Detect pipe-delimited (markdown table row)
-  if (content.startsWith('|')) {
-    parts = content.split('|').map(s => s.trim()).filter(Boolean);
+  if (line.startsWith('|')) {
+    parts = line.split('|').map(s => s.trim()).filter(Boolean);
     if (parts.length < 8) {
       console.warn(`⚠️  Skipping malformed pipe-delimited ${filename}: ${parts.length} fields`);
       return null;
@@ -204,7 +229,7 @@ function parseTsvContent(content, filename) {
     };
   } else {
     // Tab-separated
-    parts = content.split('\t');
+    parts = line.split('\t');
     if (parts.length < 8) {
       console.warn(`⚠️  Skipping malformed TSV ${filename}: ${parts.length} fields`);
       return null;
@@ -305,11 +330,16 @@ let updated = 0;
 let skipped = 0;
 const newLines = [];
 
+// Expand every pending TSV into its rows (a file may hold many — see parseTsvFile).
+const additions = [];
 for (const file of tsvFiles) {
-  const content = readFileSync(join(ADDITIONS_DIR, file), 'utf-8').trim();
-  const addition = parseTsvContent(content, file);
-  if (!addition) { skipped++; continue; }
+  const content = readFileSync(join(ADDITIONS_DIR, file), 'utf-8');
+  const rows = parseTsvFile(content, file);
+  if (rows.length === 0) { skipped++; continue; }
+  additions.push(...rows);
+}
 
+for (const addition of additions) {
   // Check for duplicate by:
   // 1. Exact report number match
   // 2. Company + role fuzzy match

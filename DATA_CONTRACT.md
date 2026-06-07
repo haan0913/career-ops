@@ -69,3 +69,15 @@ These files contain system logic, scripts, templates, and instructions that impr
 **If a file is in the User Layer, no update process may read, modify, or delete it.**
 
 **If a file is in the System Layer, it can be safely replaced with the latest version from the upstream repo.**
+
+---
+
+## Source Tiers (sourcing doctrine)
+
+Job sources are ranked by trust. **Canonical employer URL + posting date + liveness is the hard truth; a board's rank/order is never freshness or fit.**
+
+- **Tier 1 — Canonical employer ATS/API.** Greenhouse, Ashby, Lever, SmartRecruiters, Workable, Recruitee, **Workday CXS** (and future iCIMS / Oracle / SuccessFactors). Current by construction → results may flow to `data/pipeline.md` directly after the normal title / location / age filters.
+- **Tier 2 — Structured fallback / keyed aggregator.** schema.org `JobPosting` JSON-LD (`liveness-jsonld.mjs`), JSearch, Adzuna, USAJobs, Fantastic Jobs / JobsPipe. Write **only after** (a) canonicalizing to the employer/ATS apply URL (strip tracking params; store the source/referrer separately) and (b) date + liveness verification (`datePosted` / `validThrough`, `check-liveness.mjs`).
+- **Tier 3 — LinkedIn / Indeed / Glassdoor scrape/import.** Opt-in, non-default discovery lane only. Never trusted without Tier-1/Tier-2 canonical validation; must pass the freshness + liveness gate before anything reaches the pipeline.
+
+This keeps the core a fresh, employer-first scanner while allowing broad-market discovery that never injects stale or ghost leads. (See `reports/004`–`006`.)

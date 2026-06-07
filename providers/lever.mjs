@@ -30,6 +30,9 @@ export default {
       url: j.hostedUrl || '',
       company: entry.name,
       location: j.categories?.location || '',
+      // Posting date for freshness sorting/filtering. createdAt is epoch ms →
+      // normalized to YYYY-MM-DD (UTC).
+      posted: j.createdAt ? new Date(j.createdAt).toISOString().slice(0, 10) : '',
     }));
   },
 };

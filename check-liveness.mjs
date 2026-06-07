@@ -44,10 +44,13 @@ async function main() {
 
   // Sequential — project rule: never Playwright in parallel
   for (const url of urls) {
-    const { result, reason } = await checkUrlLiveness(page, url);
+    const { result, reason, jsonld } = await checkUrlLiveness(page, url);
     const icon = { active: '✅', expired: '❌', uncertain: '⚠️' }[result];
     console.log(`${icon} ${result.padEnd(10)} ${url}`);
     if (result !== 'active') console.log(`           ${reason}`);
+    if (jsonld && (jsonld.posted || jsonld.validThrough)) {
+      console.log(`           posted ${jsonld.posted || '?'}${jsonld.validThrough ? ` · valid through ${jsonld.validThrough}` : ''}`);
+    }
     if (result === 'active') active++;
     else if (result === 'expired') expired++;
     else uncertain++;

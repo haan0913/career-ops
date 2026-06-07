@@ -2,7 +2,17 @@
 
 Escanea portales de empleo configurados, filtra por relevancia de título, y añade nuevas ofertas al pipeline para evaluación posterior.
 
-> **Nota (v1.5+):** El escáner por defecto (`scan.mjs` / `npm run scan`) es **zero-token** y sólo consulta directamente las APIs públicas de Greenhouse, Ashby y Lever. Los niveles con Playwright/WebSearch descritos abajo son el flujo **agente** (ejecutado por Claude/Codex), no lo que hace `scan.mjs`. Si una empresa no tiene API Greenhouse/Ashby/Lever, `scan.mjs` la ignorará; para esos casos, el agente debe completar manualmente el Nivel 1 (Playwright) o Nivel 3 (WebSearch).
+> **Nota (v1.6+):** El escáner por defecto (`scan.mjs` / `npm run scan`) es **zero-token** y consulta directamente las APIs públicas de los proveedores en `providers/*.mjs`: **Greenhouse, Ashby, Lever, SmartRecruiters, Workable, Recruitee, Workday CXS** (Tier 1) y **JSearch** (Tier 2, requiere `JSEARCH_API_KEY`). Los niveles con Playwright/WebSearch de abajo son el flujo **agente** (Claude/Codex). Si una empresa no tiene proveedor, `scan.mjs` la ignora; el agente la cubre vía Nivel 1 (Playwright) o el modo `sweep`.
+
+## Source tiers (doctrine — read first)
+
+career-ops es **employer-ATS-first**. Orden de confianza (ver `DATA_CONTRACT.md → Source Tiers`):
+
+- **Tier 1 — APIs canónicas de ATS** (Greenhouse/Ashby/Lever/SmartRecruiters/Workable/Recruitee/**Workday CXS**): proveedores de `scan.mjs`; pueden escribir al pipeline directamente tras los filtros de título/ubicación/edad.
+- **Tier 2 — agregador/JSON-LD** (JSearch/Adzuna/USAJobs + schema.org `JobPosting` vía `liveness-jsonld.mjs`): canonicalizar al URL del empleador + verificar fecha/liveness **antes** de escribir.
+- **Tier 3 — LinkedIn/Indeed/Glassdoor** (`modes/sweep.md`): opt-in; **nunca** saltarse el gate de frescura+liveness.
+
+El ranking de un board ≠ frescura ni fit. **URL canónica del empleador + fecha de publicación + liveness = la verdad.**
 
 ## Ejecución recomendada
 
@@ -56,6 +66,8 @@ Para empresas con API pública o feed estructurado, usar la respuesta JSON/XML c
 - `workday`: `jobPostings[]`/`jobPostings` (según tenant) → `title`, `externalPath` o URL construida desde el host
 
 ### Nivel 3 — WebSearch queries (DESCUBRIMIENTO AMPLIO)
+
+> **Flujo formalizado:** este nivel está documentado como modo propio en **`modes/sweep.md`**, con una **verificación obligatoria de edad + liveness** antes de añadir nada a `pipeline.md`. Úsalo para el mercado amplio (LinkedIn/Indeed/Glassdoor) y para las empresas Workday/custom que `scan.mjs` ignora (Two Sigma, Nasdaq, DTCC, BNY, Morningstar).
 
 Los `search_queries` con `site:` filters cubren portales de forma transversal (todos los Ashby, todos los Greenhouse, etc.). Útil para descubrir empresas NUEVAS que aún no están en `tracked_companies`, pero los resultados pueden estar desfasados.
 

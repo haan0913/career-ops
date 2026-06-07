@@ -24,8 +24,15 @@
  *   node scan.mjs --dry-run        # preview without writing files
  *   node scan.mjs --company Cohere # scan a single company
  *   node scan.mjs --verify         # Playwright-check each new URL; drop expired postings
+ *   node scan.mjs --max-age-days 30 # drop postings older than 30 days (by posted date)
+ *
+ * Freshness: each provider returns a `posted` date (greenhouse first_published,
+ * ashby publishedAt, lever createdAt). New offers are sorted newest-first and the
+ * date is persisted to pipeline.md + scan-history.tsv. --max-age-days filters stale
+ * postings (offers with no date are kept and sorted last).
  */
 
+import 'dotenv/config'; // loads .env (e.g. JSEARCH_API_KEY) for keyed providers; no-op if absent
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { pathToFileURL, fileURLToPath } from 'url';
 import path from 'path';
@@ -106,12 +113,21 @@ function resolveProvider(entry, providers) {
 
 function buildTitleFilter(titleFilter) {
   const positive = (titleFilter?.positive || []).map(k => k.toLowerCase());
-  const negative = (titleFilter?.negative || []).map(k => k.toLowerCase());
+  // Negatives match as whole words/phrases, not raw substrings. This catches
+  // seniority terms at the END of a title ("Program Operations Lead") and stops
+  // them from false-matching inside another word — "Lead" no longer needs the old
+  // trailing-space hack, "Architect" stops blocking "Business Architecture", and
+  // "Intern" stops blocking "Internal". Title and keywords are normalized (every
+  // non-alphanumeric run becomes a space) then padded so matches land on token
+  // boundaries. Positives stay substring-based to preserve existing breadth.
+  const normalize = (s) => ' ' + s.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  const negative = (titleFilter?.negative || []).map(k => normalize(k.toLowerCase()));
 
   return (title) => {
     const lower = title.toLowerCase();
+    const normTitle = normalize(lower);
     const hasPositive = positive.length === 0 || positive.some(k => lower.includes(k));
-    const hasNegative = negative.some(k => lower.includes(k));
+    const hasNegative = negative.some(nk => normTitle.includes(nk));
     return hasPositive && !hasNegative;
   };
 }
@@ -203,7 +219,7 @@ function appendToPipeline(offers) {
     const procIdx = text.indexOf('## Procesadas');
     const insertAt = procIdx === -1 ? text.length : procIdx;
     const block = `\n${marker}\n\n` + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
+      `- [ ] ${o.url} | ${o.company} | ${o.title} | posted ${o.posted || 'n/a'}`
     ).join('\n') + '\n\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   } else {
@@ -213,7 +229,7 @@ function appendToPipeline(offers) {
     const insertAt = nextSection === -1 ? text.length : nextSection;
 
     const block = '\n' + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
+      `- [ ] ${o.url} | ${o.company} | ${o.title} | posted ${o.posted || 'n/a'}`
     ).join('\n') + '\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   }
@@ -222,17 +238,18 @@ function appendToPipeline(offers) {
 }
 
 function appendToScanHistory(offers, date, status = 'added') {
-  // Ensure file + header exist. Location appended as 7th column for non-breaking
-  // backward compat — older scan-history.tsv files with 6 columns still parse fine
-  // since loadSeenUrls only reads column 0. `status` is parameterized so callers
-  // can record verify outcomes (`skipped_expired`, etc.) without the legacy
-  // `(expired)` suffix in `source`.
+  // Ensure file + header exist. Columns are append-only for non-breaking backward
+  // compat — older scan-history.tsv files with fewer columns still parse fine since
+  // loadSeenUrls only reads column 0. `posted` (8th col) is the posting date from
+  // the provider; `location` is the 7th. `status` is parameterized so callers can
+  // record verify outcomes (`skipped_expired`, etc.) without the legacy `(expired)`
+  // suffix in `source`.
   if (!existsSync(SCAN_HISTORY_PATH)) {
-    writeFileSync(SCAN_HISTORY_PATH, 'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\tlocation\n', 'utf-8');
+    writeFileSync(SCAN_HISTORY_PATH, 'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\tlocation\tposted\n', 'utf-8');
   }
 
   const lines = offers.map(o =>
-    `${o.url}\t${date}\t${o.source}\t${o.title}\t${o.company}\t${status}\t${o.location || ''}`
+    `${o.url}\t${date}\t${o.source}\t${o.title}\t${o.company}\t${status}\t${o.location || ''}\t${o.posted || ''}`
   ).join('\n') + '\n';
 
   appendFileSync(SCAN_HISTORY_PATH, lines, 'utf-8');
@@ -346,6 +363,13 @@ async function main() {
   const verify = args.includes('--verify');
   const companyFlag = args.indexOf('--company');
   const filterCompany = companyFlag !== -1 ? args[companyFlag + 1]?.toLowerCase() : null;
+  const maxAgeFlag = args.indexOf('--max-age-days');
+  let maxAgeDays = null;
+  if (maxAgeFlag !== -1) {
+    const n = parseInt(args[maxAgeFlag + 1], 10);
+    if (Number.isFinite(n) && n > 0) maxAgeDays = n;
+    else console.error('⚠️  --max-age-days needs a positive number; ignoring.');
+  }
 
   // 1. Load providers
   const providers = await loadProviders(PROVIDERS_DIR);
@@ -440,6 +464,21 @@ async function main() {
 
   await parallelFetch(tasks, CONCURRENCY);
 
+  // 5.4. Freshness — optional age filter (by posting date) + newest-first sort.
+  // Offers with no posting date are kept (don't penalize missing data) and sort last.
+  let totalFilteredAge = 0;
+  if (maxAgeDays !== null) {
+    const cutoff = new Date(Date.now() - maxAgeDays * 86_400_000).toISOString().slice(0, 10);
+    for (let i = newOffers.length - 1; i >= 0; i--) {
+      const p = newOffers[i].posted;
+      if (p && p < cutoff) {
+        newOffers.splice(i, 1);
+        totalFilteredAge++;
+      }
+    }
+  }
+  newOffers.sort((a, b) => (b.posted || '').localeCompare(a.posted || ''));
+
   // 5.5. Optional liveness verification — drop expired and guard-rejected postings
   let verifiedOffers = newOffers;
   let expiredOffers = [];
@@ -491,6 +530,7 @@ async function main() {
   console.log(`Total jobs found:      ${totalFound}`);
   console.log(`Filtered by title:     ${totalFilteredTitle} removed`);
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
+  if (maxAgeDays !== null) console.log(`Filtered by age:       ${totalFilteredAge} removed (>${maxAgeDays}d old)`);
   console.log(`Duplicates:            ${totalDupes} skipped`);
   if (verify) {
     console.log(`Expired (verified):    ${expiredOffers.length} dropped`);
@@ -507,9 +547,10 @@ async function main() {
   }
 
   if (verifiedOffers.length > 0) {
-    console.log('\nNew offers:');
+    console.log('\nNew offers (newest first):');
     for (const o of verifiedOffers) {
-      console.log(`  + ${o.company} | ${o.title} | ${o.location || 'N/A'}`);
+      console.log(`  + [${o.posted || ' undated '}] ${o.company} | ${o.title} | ${o.location || 'N/A'}`);
+      console.log(`      ${o.url}`);
     }
     if (dryRun) {
       console.log('\n(dry run — run without --dry-run to save results)');

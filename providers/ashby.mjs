@@ -30,6 +30,8 @@ export default {
       url: j.jobUrl || '',
       company: entry.name,
       location: j.location || '',
+      // Posting date for freshness sorting/filtering. Normalized to YYYY-MM-DD.
+      posted: (j.publishedAt || '').slice(0, 10),
     }));
   },
 };

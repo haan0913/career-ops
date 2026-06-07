@@ -61,6 +61,9 @@ export default {
       url: j.absolute_url,
       company: entry.name,
       location: j.location?.name || '',
+      // Posting date for freshness sorting/filtering. first_published is when the
+      // requisition first went live; fall back to updated_at. Normalized to YYYY-MM-DD.
+      posted: (j.first_published || j.updated_at || '').slice(0, 10),
     }));
   },
 };

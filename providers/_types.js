@@ -18,6 +18,11 @@
  * @property {string} company  May be empty when the source can't expose it
  *                             at the list-page level; populated downstream.
  * @property {string} location May be empty.
+ * @property {string} [posted] Optional posting date, normalized to YYYY-MM-DD.
+ *                             Sourced from greenhouse first_published / ashby
+ *                             publishedAt / lever createdAt. Empty when the
+ *                             source doesn't expose a date. Used by scan.mjs for
+ *                             --max-age-days filtering and newest-first sorting.
  */
 
 /**

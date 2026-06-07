@@ -6,6 +6,7 @@
  */
 
 import { classifyLiveness } from './liveness-core.mjs';
+import { extractJobPostingJsonLd } from './liveness-jsonld.mjs';
 
 const NAVIGATE_TIMEOUT_MS = 15_000;
 const HYDRATION_WAIT_MS = 2_000;
@@ -92,7 +93,15 @@ export async function checkUrlLiveness(page, url) {
         .filter(Boolean);
     });
 
-    return classifyLiveness({ status, finalUrl, bodyText, applyControls });
+    // Best-effort schema.org JobPosting JSON-LD → real datePosted / validThrough for
+    // freshness, available even when there is no clean ATS API (the Tier-2 sweep /
+    // liveness backbone). Additive: callers that don't read `jsonld` are unaffected.
+    let jsonld = null;
+    try {
+      jsonld = extractJobPostingJsonLd(await page.content(), finalUrl);
+    } catch { /* non-fatal */ }
+
+    return { ...classifyLiveness({ status, finalUrl, bodyText, applyControls }), jsonld };
   } catch (err) {
     // Transient failures (timeout, DNS, TLS, 5xx) shouldn't be treated as expired —
     // doing so would cause scan --verify to drop the URL and write it to scan-history,
