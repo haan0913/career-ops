@@ -1,6 +1,8 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 
+import { escapeHtml } from './_html.mjs';
+
 // JSearch provider (OpenWeb Ninja / RapidAPI) — aggregated job search over Google for
 // Jobs: LinkedIn, Indeed, Glassdoor, ZipRecruiter, and company sites incl. Workday/iCIMS
 // that have NO public API. This is the broad-market lane the sweep used to hand-collect.
@@ -76,20 +78,119 @@ function isJunkUrl(url) {
     return true; // unparseable → treat as junk
   }
 }
-// Choose the best apply URL: prefer a direct (employer) option, else the first non-junk
-// option. Returns null when every option is junk → the job is dropped.
-function pickApplyUrl(j) {
-  const opts = [];
-  if (j.job_apply_link) opts.push({ url: j.job_apply_link, direct: !!j.job_apply_is_direct });
-  for (const o of Array.isArray(j.apply_options) ? j.apply_options : []) {
-    if (o && o.apply_link) opts.push({ url: o.apply_link, direct: !!o.is_direct });
+// A bare careers landing page (no specific requisition) is the "link opens the
+// generic careers page" failure — deprioritize it so a deeper, job-specific link
+// wins. Matches /careers, /jobs, /search, /openings, /en-us/careers, etc.
+const GENERIC_PATH =
+  /^\/?(?:careers?|jobs?|join-?us|work-?with-us|opportunities|openings|search|vacancies|positions|en(?:-[a-z]{2})?\/(?:careers?|jobs?))\/?$/i;
+function pathSpecificity(url) {
+  let p;
+  try {
+    p = new URL(url);
+  } catch {
+    return -5;
   }
-  const clean = opts.filter((o) => !isJunkUrl(o.url));
-  if (clean.length === 0) return null;
-  return (clean.find((o) => o.direct) || clean[0]).url;
+  const seg = p.pathname.replace(/\/+$/, '');
+  if (seg === '' || GENERIC_PATH.test(p.pathname)) return -3; // generic landing page
+  if (/\d{4,}/.test(seg) || /\/(?:job|jobs|posting|position)s?[/=][\w-]{5,}/i.test(seg)) return 1; // req-id in path
+  if (/[?&](?:jid|gh_jid|jobid|job_id|id|req|requisition)=/i.test(p.search)) return 1; // req-id in query
+  return 0;
 }
 
-export { isJunkUrl, pickApplyUrl }; // exported for unit tests
+// Rank every apply option (job_apply_link + apply_options[]), highest first.
+// Score = direct-employer bonus + path specificity. Carries publisher + isDirect
+// so the snapshot/UI can show "via LinkedIn" and offer alternative apply paths.
+function rankedOptions(j) {
+  const opts = [];
+  if (j.job_apply_link)
+    opts.push({ url: j.job_apply_link, isDirect: !!j.job_apply_is_direct, publisher: j.job_publisher || '' });
+  for (const o of Array.isArray(j.apply_options) ? j.apply_options : []) {
+    if (o && o.apply_link) opts.push({ url: o.apply_link, isDirect: !!o.is_direct, publisher: o.publisher || '' });
+  }
+  const seen = new Set();
+  return opts
+    .filter((o) => !isJunkUrl(o.url) && !seen.has(o.url) && seen.add(o.url))
+    .map((o) => ({ ...o, _score: (o.isDirect ? 2 : 0) + pathSpecificity(o.url) }))
+    .sort((a, b) => b._score - a._score);
+}
+
+// Best apply URL = highest-scored non-junk option. null when all junk → drop the
+// job. (string return kept for provider unit tests; rankedOptions carries the rest.)
+function pickApplyUrl(j) {
+  const r = rankedOptions(j);
+  return r.length ? r[0].url : null;
+}
+
+// ── JD snapshot builders ────────────────────────────────────────────
+// JSearch returns the full posting in the SAME /search response: job_description
+// (plain text), job_highlights {Qualifications,Responsibilities,Benefits}, and
+// salary fields. We render them to clean HTML once, at scan time.
+
+const EMPLOYMENT_LABELS = {
+  FULLTIME: 'Full-time',
+  PARTTIME: 'Part-time',
+  CONTRACTOR: 'Contract',
+  CONTRACT: 'Contract',
+  INTERN: 'Internship',
+  TEMPORARY: 'Temporary',
+};
+function humanEmploymentType(t) {
+  if (!t) return '';
+  return EMPLOYMENT_LABELS[String(t).toUpperCase()] || String(t);
+}
+
+const PERIOD_SUFFIX = { YEAR: '/yr', MONTH: '/mo', WEEK: '/wk', HOUR: '/hr', DAY: '/day' };
+function formatSalary(j) {
+  const min = Number(j.job_min_salary) || 0;
+  const max = Number(j.job_max_salary) || 0;
+  if (!min && !max) return '';
+  const cur = (j.job_salary_currency || 'USD').toUpperCase();
+  const sym = cur === 'USD' ? '$' : `${cur} `;
+  const per = PERIOD_SUFFIX[String(j.job_salary_period || '').toUpperCase()] || '';
+  const k = (n) => (n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`);
+  const lo = min ? `${sym}${k(min)}` : '';
+  const hi = max ? `${sym}${k(max)}` : '';
+  if (lo && hi && min !== max) return `${lo}–${hi}${per}`;
+  return `${lo || hi}${per}`;
+}
+
+// Plain-text description → paragraphs + bullet lists. JSearch uses \n\n between
+// blocks and • / - / * for bullets.
+function descToHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .split(/\n{2,}/)
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => {
+      const lines = b.split('\n').map((l) => l.trim()).filter(Boolean);
+      const bullety = lines.length > 1 && lines.every((l) => /^[•\-*]/.test(l));
+      if (bullety)
+        return '<ul>' + lines.map((l) => `<li>${escapeHtml(l.replace(/^[•\-*]\s*/, ''))}</li>`).join('') + '</ul>';
+      return `<p>${escapeHtml(b).replace(/\n/g, '<br/>')}</p>`;
+    })
+    .join('\n');
+}
+
+function highlightsHtml(h) {
+  if (!h || typeof h !== 'object') return '';
+  let out = '';
+  for (const k of ['Responsibilities', 'Qualifications', 'Benefits']) {
+    const arr = h[k];
+    if (Array.isArray(arr) && arr.length)
+      out += `<h3>${escapeHtml(k)}</h3><ul>` + arr.map((x) => `<li>${escapeHtml(x)}</li>`).join('') + '</ul>';
+  }
+  return out ? `<div class="jd-highlights">${out}</div>` : '';
+}
+
+// Highlights (scannable summary, Indeed-style) on top, then the full description.
+function buildJdHtml(j) {
+  const hi = highlightsHtml(j.job_highlights);
+  const desc = descToHtml(j.job_description);
+  return [hi, desc].filter(Boolean).join('\n');
+}
+
+export { isJunkUrl, pickApplyUrl, rankedOptions, pathSpecificity, formatSalary }; // exported for unit tests
 
 /** @type {Provider} */
 export default {
@@ -131,17 +232,28 @@ export default {
     const data = Array.isArray(json?.data) ? json.data : [];
     return data
       .map((j) => {
-        const url = pickApplyUrl(j); // canonicalize + drop junk/spam relisters
-        if (!url) return null;
+        const ranked = rankedOptions(j); // canonicalize + drop junk/spam relisters
+        if (ranked.length === 0) return null;
+        const chosen = ranked[0];
         return {
           title: j.job_title || '',
-          url,
+          url: chosen.url,
           // Aggregated results carry the real employer per job, not the query label.
           company: j.employer_name || entry.name,
           location: j.job_is_remote
             ? 'Remote'
             : [j.job_city, j.job_state, j.job_country].filter(Boolean).join(', '),
           posted: isoDate(j.job_posted_at_timestamp, j.job_posted_at_datetime_utc),
+          // Rich snapshot fields — captured here so scan.mjs persists the JD and the
+          // dashboard never has to live-fetch a rot-prone employer link (jd-store.mjs).
+          employmentType: humanEmploymentType(j.job_employment_type),
+          salary: formatSalary(j),
+          publisher: chosen.publisher || j.job_publisher || '',
+          logo: j.employer_logo || '',
+          googleLink: j.job_google_link || '',
+          applyIsDirect: chosen.isDirect,
+          applyOptions: ranked.slice(0, 4).map((o) => ({ url: o.url, publisher: o.publisher, isDirect: o.isDirect })),
+          descriptionHtml: buildJdHtml(j),
         };
       })
       .filter(Boolean);

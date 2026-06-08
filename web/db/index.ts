@@ -21,7 +21,15 @@ sqlite.exec(`
 `);
 
 // Additive migrations — older projection files predate these columns.
-for (const col of ["location TEXT", "source TEXT"]) {
+for (const col of [
+  "location TEXT",
+  "source TEXT",
+  "description TEXT", // JD preview text (from the snapshot store)
+  "salary TEXT",
+  "logo TEXT",
+  "apply_url TEXT", // best apply link (may differ from the dedup url)
+  "publisher TEXT", // "via LinkedIn" etc.
+]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);
   } catch {

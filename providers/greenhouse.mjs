@@ -4,6 +4,8 @@
 // Greenhouse provider — hits the public boards-api JSON endpoint.
 // Handles both explicit `api:` URLs and auto-detection from `careers_url`.
 
+import { decodeEntities, sanitizeHtml } from './_html.mjs';
+
 const ALLOWED_GREENHOUSE_HOSTS = new Set([
   'boards-api.greenhouse.io',
   'boards.greenhouse.io',
@@ -52,9 +54,14 @@ export default {
     const apiUrl = resolveApiUrl(entry);
     if (!apiUrl) throw new Error(`greenhouse: cannot derive API URL for ${entry.name}`);
     assertGreenhouseUrl(apiUrl);
+    // content=true returns each posting's full HTML description in the SAME list
+    // call (no per-job N+1) so scan.mjs can snapshot the JD. Hostname is unchanged,
+    // so assertGreenhouseUrl still guarantees the allowlist.
+    const sep = apiUrl.includes('?') ? '&' : '?';
+    const listUrl = `${apiUrl}${sep}content=true`;
     // redirect:'error' prevents SSRF via server-side redirects; combined with
     // assertGreenhouseUrl above it guarantees the final hostname stays in the allowlist.
-    const json = await ctx.fetchJson(apiUrl, { redirect: 'error' });
+    const json = await ctx.fetchJson(listUrl, { redirect: 'error' });
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
     return jobs.filter(j => j.absolute_url).map(j => ({
       title: j.title || '',
@@ -64,6 +71,8 @@ export default {
       // Posting date for freshness sorting/filtering. first_published is when the
       // requisition first went live; fall back to updated_at. Normalized to YYYY-MM-DD.
       posted: (j.first_published || j.updated_at || '').slice(0, 10),
+      // Full JD (content=true) — entity-decoded + sanitized for the snapshot store.
+      descriptionHtml: j.content ? sanitizeHtml(decodeEntities(j.content)) : '',
     }));
   },
 };

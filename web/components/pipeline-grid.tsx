@@ -11,6 +11,7 @@ import {
   DollarSign,
   Briefcase,
   CalendarClock,
+  Globe,
 } from "lucide-react";
 import { fetchJd, type JdResult } from "@/lib/jd";
 import { scoreRole } from "@/lib/actions";
@@ -23,6 +24,11 @@ export type CardJob = {
   posted: string;
   location: string | null;
   source: string | null;
+  description: string | null;
+  salary: string | null;
+  logo: string | null;
+  apply_url: string | null;
+  publisher: string | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
@@ -38,7 +44,7 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
     () =>
       jobs.filter((j) => {
         if (q) {
-          const hay = `${j.title} ${j.company} ${j.location ?? ""}`.toLowerCase();
+          const hay = `${j.title} ${j.company} ${j.location ?? ""} ${j.description ?? ""}`.toLowerCase();
           if (!hay.includes(q.toLowerCase())) return false;
         }
         if (mode !== "all" && workMode(`${j.location ?? ""} ${j.title}`) !== mode) return false;
@@ -133,7 +139,7 @@ function FilterBar({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search roles or companies…"
+          placeholder="Search roles, companies, descriptions…"
           className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
         />
       </div>
@@ -169,9 +175,42 @@ function ModeBadge({ mode }: { mode: Mode }) {
   if (!mode) return null;
   return (
     <span
-      className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-inset ${modeTone(mode)}`}
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-inset ${modeTone(mode)}`}
     >
       {mode}
+    </span>
+  );
+}
+
+// Employer logo with a graceful fallback to a building glyph when missing/broken.
+function LogoImg({ src, alt, size = "size-9" }: { src?: string | null; alt: string; size?: string }) {
+  const [ok, setOk] = useState(true);
+  if (!src || !ok) {
+    return (
+      <div
+        className={`grid ${size} shrink-0 place-items-center rounded-lg bg-white/[0.04] text-zinc-500 ring-1 ring-inset ring-white/10`}
+      >
+        <Building2 className="size-4" />
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      onError={() => setOk(false)}
+      className={`${size} shrink-0 rounded-lg bg-white object-contain p-0.5 ring-1 ring-inset ring-white/10`}
+    />
+  );
+}
+
+function SalaryChip({ salary }: { salary: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
+      <DollarSign className="size-3" />
+      {salary.replace(/^\$/, "")}
     </span>
   );
 }
@@ -185,25 +224,33 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       onClick={onOpen}
       className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-900/40 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-zinc-900/70 hover:shadow-lg hover:shadow-black/30"
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums">
-          <span className={`size-1.5 rounded-full ${tone.dot}`} />
-          <span className={tone.text}>{freshLabel(d)}</span>
-        </span>
+      <div className="flex items-start gap-3">
+        <LogoImg src={job.logo} alt={job.company} />
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-white">
+            {job.title}
+          </h3>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-400">
+            <span className="truncate font-medium">{job.company}</span>
+            {job.publisher && <span className="truncate text-zinc-600">· via {job.publisher}</span>}
+          </div>
+        </div>
         <ModeBadge mode={mode} />
       </div>
 
-      <div className="flex-1">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-white">
-          {job.title}
-        </h3>
-        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-400">
-          <Building2 className="size-3 shrink-0" />
-          <span className="truncate">{job.company}</span>
-        </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {job.salary && <SalaryChip salary={job.salary} />}
+        <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums">
+          <span className={`size-1.5 rounded-full ${tone.dot}`} />
+          <span className={tone.text}>{freshLabel(d)}</span>
+        </span>
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5 text-xs text-zinc-500">
+      {job.description && (
+        <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500">{job.description}</p>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5 text-xs text-zinc-500">
         <span className="inline-flex min-w-0 items-center gap-1">
           <MapPin className="size-3 shrink-0" />
           <span className="truncate">{job.location || "location n/a"}</span>
@@ -228,6 +275,14 @@ function reasonText(reason?: string, error?: string) {
   if (reason === "blocked") return "This site blocks automated reads, so the description can't be shown inline.";
   if (error) return "Couldn't load the description inline.";
   return "No description found on the page.";
+}
+
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "link";
+  }
 }
 
 function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
@@ -260,7 +315,16 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
   const tone = freshTone(d);
   const loc = jd?.location || job.location || "";
   const mode = (workMode(`${loc} ${job.title}`) || (jd?.mode as Mode) || "") as Mode;
-  const hasMeta = !!(jd?.salary || jd?.employmentType || jd?.validThrough);
+  const salary = jd?.salary || job.salary || "";
+  const publisher = jd?.publisher || job.publisher || "";
+  const logo = jd?.logo || job.logo || null;
+  const hasMeta = !!(salary || jd?.employmentType || jd?.validThrough || publisher);
+
+  // Apply paths: primary best link, plus any distinct alternatives and a Google
+  // Jobs fallback that resolves even when the direct posting has rotted.
+  const applyUrl = jd?.applyUrl || job.apply_url || job.url;
+  const googleLink = jd?.googleLink || "";
+  const alts = (jd?.applyOptions || []).filter((o) => o.url && o.url !== applyUrl).slice(0, 3);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -270,27 +334,30 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
         style={{ animation: "slideIn 0.3s cubic-bezier(0.22,1,0.36,1) both" }}
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/[0.08] p-5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`size-1.5 rounded-full ${tone.dot}`} />
-                <span className={tone.text}>{freshLabel(d)}</span>
-              </span>
-              {job.source && <span className="font-mono text-zinc-600">· {job.source}</span>}
-            </div>
-            <h2 className="mt-1.5 text-lg font-semibold leading-tight text-white">{job.title}</h2>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400">
-              <span className="inline-flex items-center gap-1.5">
-                <Building2 className="size-3.5" />
-                {job.company}
-              </span>
-              {loc && (
+          <div className="flex min-w-0 gap-3">
+            <LogoImg src={logo} alt={job.company} size="size-11" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="size-3.5" />
-                  {loc}
+                  <span className={`size-1.5 rounded-full ${tone.dot}`} />
+                  <span className={tone.text}>{freshLabel(d)}</span>
                 </span>
-              )}
-              <ModeBadge mode={mode} />
+                {job.source && <span className="font-mono text-zinc-600">· {job.source}</span>}
+              </div>
+              <h2 className="mt-1 text-lg font-semibold leading-tight text-white">{job.title}</h2>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400">
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <Building2 className="size-3.5" />
+                  {job.company}
+                </span>
+                {loc && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="size-3.5" />
+                    {loc}
+                  </span>
+                )}
+                <ModeBadge mode={mode} />
+              </div>
             </div>
           </div>
           <button
@@ -302,14 +369,16 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] px-5 py-3">
           <a
-            href={job.url}
+            href={applyUrl}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-3.5 py-1.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/20 transition-colors hover:bg-indigo-400"
           >
-            Apply <ExternalLink className="size-3.5" />
+            Apply
+            {publisher && <span className="font-normal text-indigo-100/80">· via {publisher}</span>}
+            <ExternalLink className="size-3.5" />
           </a>
           <button
             disabled={scoring}
@@ -330,11 +399,39 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
               <span className={`font-mono font-semibold ${scoreTone(score)}`}>{score}</span>
             )}
           </button>
+          {googleLink && (
+            <a
+              href={googleLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+            >
+              <Globe className="size-3.5" /> Google Jobs
+            </a>
+          )}
         </div>
+
+        {alts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/[0.06] px-5 py-2 text-xs text-zinc-500">
+            <span>Other ways to apply:</span>
+            {alts.map((o, i) => (
+              <a
+                key={i}
+                href={o.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-zinc-400 hover:text-indigo-300 hover:underline"
+              >
+                {o.publisher || hostLabel(o.url)}
+                <ExternalLink className="size-3" />
+              </a>
+            ))}
+          </div>
+        )}
 
         {hasMeta && (
           <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] px-5 py-2.5">
-            {jd?.salary && <MetaChip icon={DollarSign} label={jd.salary} />}
+            {salary && <MetaChip icon={DollarSign} label={salary} />}
             {jd?.employmentType && <MetaChip icon={Briefcase} label={jd.employmentType} />}
             {jd?.validThrough && <MetaChip icon={CalendarClock} label={`apply by ${jd.validThrough}`} />}
           </div>
@@ -350,14 +447,26 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
           ) : (
             <div className="rounded-xl border border-dashed border-white/[0.1] p-8 text-center text-sm text-zinc-500">
               <p>{reasonText(jd?.reason, jd?.error)}</p>
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-indigo-400 hover:underline"
-              >
-                Open the original posting <ExternalLink className="size-3.5" />
-              </a>
+              <div className="mt-3 flex items-center justify-center gap-3">
+                <a
+                  href={applyUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-indigo-400 hover:underline"
+                >
+                  Open the original posting <ExternalLink className="size-3.5" />
+                </a>
+                {googleLink && (
+                  <a
+                    href={googleLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 hover:underline"
+                  >
+                    <Globe className="size-3.5" /> Search Google Jobs
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>

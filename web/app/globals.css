@@ -75,6 +75,17 @@ body {
   font-size: 14px;
   line-height: 1.7;
 }
+/* Scannable "highlights" summary box (Responsibilities / Qualifications / Benefits) */
+.jd-prose .jd-highlights {
+  margin: 0 0 1.4em;
+  padding: 0.4em 1.1em 1em;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+.jd-prose .jd-highlights h3:first-child {
+  margin-top: 0.7em;
+}
 .jd-prose h1,
 .jd-prose h2,
 .jd-prose h3,

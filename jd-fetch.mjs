@@ -7,7 +7,9 @@
 //   4. give up → { ok:false } so the UI offers "open original"
 // Output: a single JSON object on stdout.
 
+import { pathToFileURL } from "url";
 import { extractJobPostingJsonLd } from "./liveness-jsonld.mjs";
+import { readSnapshot } from "./jd-store.mjs";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -275,17 +277,20 @@ async function browserFetch(url) {
 const OK_MIN = 200;
 const isOk = (r) => !!(r && r.descriptionHtml && r.descriptionHtml.length >= OK_MIN);
 
-async function main() {
-  const url = process.argv[2];
-  if (!url) {
-    console.log(JSON.stringify({ ok: false, error: "no url" }));
-    return;
-  }
+// Resolve a JD for a URL. Snapshot-first: a scan-time snapshot (jd-store) is
+// returned instantly and is dead-link-proof; otherwise fall through the live
+// tiers (ATS API → JSON-LD → browser render). Never throws — returns a result obj.
+export async function resolveJd(url) {
+  if (!url) return { ok: false, error: "no url" };
   const guard = rejectPrivateOrInvalid(url);
-  if (guard) {
-    console.log(JSON.stringify({ ok: false, url, error: guard.reason }));
-    return;
+  if (guard) return { ok: false, url, error: guard.reason, reason: guard.reason };
+
+  // Snapshot captured at scan time — instant, and readable even if the link rotted.
+  const snap = readSnapshot(url);
+  if (snap && (snap.descriptionHtml || "").length >= OK_MIN) {
+    return { ok: true, url, cached: true, ...snap };
   }
+
   try {
     // Fast tiers: clean ATS APIs, then a plain fetch + JSON-LD.
     let r = (await greenhouse(url).catch(() => null)) || (await lever(url).catch(() => null));
@@ -302,10 +307,17 @@ async function main() {
     if (!ok && !r.reason) {
       r.reason = /404|410/.test(r.error || "") ? "expired" : r.error ? "blocked" : "no_jd";
     }
-    console.log(JSON.stringify({ ok, url, ...r }));
+    return { ok, url, ...r };
   } catch (e) {
-    console.log(JSON.stringify({ ok: false, url, error: String(e?.message || e) }));
+    return { ok: false, url, error: String(e?.message || e) };
   }
 }
 
-main();
+async function main() {
+  console.log(JSON.stringify(await resolveJd(process.argv[2])));
+}
+
+// Run only when invoked directly (node jd-fetch.mjs <url>); importable otherwise.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

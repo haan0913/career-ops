@@ -44,6 +44,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 
 import { makeHttpCtx } from './providers/_http.mjs';
+import { writeSnapshot } from './jd-store.mjs';
 
 const parseYaml = yaml.load;
 
@@ -534,6 +535,36 @@ async function main() {
     appendToPipeline(verifiedOffers);
     appendToScanHistory(verifiedOffers, date);
   }
+
+  // 6b. JD snapshots — persist the full description + apply metadata the provider
+  // captured (jsearch job_description, greenhouse content=true) so the dashboard
+  // reads it instantly and the JD stays readable even after the employer link rots.
+  // Only offers that carry a real description are snapshotted.
+  let snappedCount = 0;
+  if (!dryRun) {
+    for (const o of verifiedOffers) {
+      if (o.descriptionHtml && o.descriptionHtml.length >= 80) {
+        writeSnapshot({
+          url: o.url,
+          source: o.source,
+          title: o.title,
+          company: o.company,
+          location: o.location || '',
+          employmentType: o.employmentType || '',
+          salary: o.salary || '',
+          posted: o.posted || '',
+          publisher: o.publisher || '',
+          logo: o.logo || '',
+          applyUrl: o.url,
+          googleLink: o.googleLink || '',
+          applyIsDirect: !!o.applyIsDirect,
+          applyOptions: o.applyOptions || [],
+          descriptionHtml: o.descriptionHtml,
+        });
+        snappedCount++;
+      }
+    }
+  }
   if (!dryRun && expiredOffers.length > 0) {
     appendToScanHistory(expiredOffers, date, 'skipped_expired');
   }
@@ -575,6 +606,7 @@ async function main() {
     console.log(`Invalid (guarded):     ${invalidOffers.length}`);
   }
   console.log(`New offers added:      ${verifiedOffers.length}`);
+  if (snappedCount > 0) console.log(`JD snapshots saved:    ${snappedCount}`);
 
   if (errors.length > 0) {
     console.log(`\nErrors (${errors.length}):`);

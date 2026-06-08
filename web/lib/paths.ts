@@ -7,6 +7,8 @@ export const ROOT = process.env.CAREER_OPS_ROOT
   : path.resolve(process.cwd(), "..");
 
 export const DATA = path.join(ROOT, "data");
+// JD snapshot store — one JSON per job URL, written at scan time by jd-store.mjs.
+export const JD_DIR = path.join(DATA, "jd");
 export const REPORTS = path.join(ROOT, "reports");
 export const BATCH_ADDITIONS = path.join(ROOT, "batch", "tracker-additions");
 

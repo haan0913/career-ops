@@ -6,9 +6,12 @@ import { ROOT } from "./paths";
 
 const run = promisify(execFile);
 
+export type ApplyOption = { url: string; publisher?: string; isDirect?: boolean };
+
 export type JdResult = {
   ok: boolean;
   url: string;
+  cached?: boolean; // served from the scan-time snapshot store (instant, dead-link-proof)
   source?: string;
   title?: string;
   company?: string;
@@ -18,6 +21,11 @@ export type JdResult = {
   salary?: string;
   posted?: string;
   validThrough?: string;
+  publisher?: string;
+  logo?: string;
+  applyUrl?: string;
+  googleLink?: string;
+  applyOptions?: ApplyOption[];
   descriptionHtml?: string;
   reason?: string;
   error?: string;
