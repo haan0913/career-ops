@@ -35,6 +35,15 @@ function serialize(task) {
 async function fetchJsonRetry(ctx, url, opts, tries = 3) {
   for (let i = 0; ; i++) {
     try {
+      // Capture the RapidAPI monthly-quota headers when available so the scan summary
+      // (and the dashboard) can surface remaining requests. Falls back to plain fetchJson.
+      if (typeof ctx.fetchJsonMeta === 'function') {
+        const { json, headers } = await ctx.fetchJsonMeta(url, opts);
+        const rem = headers?.get?.('x-ratelimit-requests-remaining');
+        const lim = headers?.get?.('x-ratelimit-requests-limit');
+        if (rem != null) console.log(`JSearch quota: ${rem}/${lim ?? '?'}`);
+        return json;
+      }
       return await ctx.fetchJson(url, opts);
     } catch (err) {
       if (err && err.status === 429 && i < tries - 1) {

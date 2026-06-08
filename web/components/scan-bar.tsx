@@ -32,7 +32,7 @@ export function ScanBar() {
             setMsg("scanning…");
             try {
               const r = await runScan(days);
-              setMsg(`+${r.added} new`);
+              setMsg(`+${r.added} new${r.quota ? ` · ${r.quota.remaining} JSearch left` : ""}`);
               router.refresh();
             } catch {
               setMsg("scan failed");

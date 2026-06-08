@@ -39,10 +39,18 @@ export async function fetchText(url, opts = {}) {
   return await res.text();
 }
 
+// Like fetchJson but also returns the response headers (e.g. rate-limit headers).
+export async function fetchJsonMeta(url, opts = {}) {
+  const res = await fetchWithTimeout(url, opts);
+  const json = await res.json();
+  return { json, headers: res.headers };
+}
+
 export function makeHttpCtx() {
   return {
     transport: 'http',
     fetchJson,
     fetchText,
+    fetchJsonMeta,
   };
 }

@@ -10,7 +10,9 @@ const run = promisify(execFile);
 // node_modules, .env, model cache, and the tier-aware liveness gate) — no logic is
 // duplicated in the dashboard.
 
-export async function runScan(maxAgeDays = 30): Promise<{ added: number; tail: string }> {
+export async function runScan(
+  maxAgeDays = 30,
+): Promise<{ added: number; quota: { remaining: number; limit: number | null } | null; tail: string }> {
   // Real scan: writes fresh roles to data/pipeline.md (Tier-1 direct, Tier-2 gated).
   const { stdout } = await run("node", ["scan.mjs", "--max-age-days", String(maxAgeDays)], {
     cwd: ROOT,
@@ -18,7 +20,9 @@ export async function runScan(maxAgeDays = 30): Promise<{ added: number; tail: s
     maxBuffer: 16 * 1024 * 1024,
   });
   const added = Number(stdout.match(/New offers added:\s*(\d+)/)?.[1] ?? 0);
-  return { added, tail: stdout.split("\n").slice(-20).join("\n") };
+  const q = [...stdout.matchAll(/JSearch quota:\s*(\d+)\/(\d+|\?)/g)].at(-1);
+  const quota = q ? { remaining: Number(q[1]), limit: q[2] === "?" ? null : Number(q[2]) } : null;
+  return { added, quota, tail: stdout.split("\n").slice(-20).join("\n") };
 }
 
 export async function scoreRole(jd: string): Promise<{ score: number; mode: string }> {
