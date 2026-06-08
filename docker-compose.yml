@@ -1,0 +1,32 @@
+# career-ops dashboard — one-command launch.
+#
+#   docker compose up --build      first run / after code changes  →  http://localhost:3737
+#   docker compose up -d           run in the background
+#   docker compose down            stop
+#
+# Your real data + config stay on the HOST (mounted below), so anything the dashboard
+# writes — status changes (write-back), scans — persists to your markdown/TSV and
+# survives container restarts. Nothing personal is baked into the image.
+
+services:
+  dashboard:
+    build: .
+    image: career-ops-dashboard
+    container_name: career-ops
+    ports:
+      - "3737:3737"
+    env_file:
+      - path: ./.env # JSEARCH_API_KEY etc. (optional)
+        required: false
+    volumes:
+      # user-layer data (read + write)
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./output:/app/output
+      - ./jds:/app/jds
+      - ./config:/app/config
+      # user-layer single files
+      - ./cv.md:/app/cv.md
+      - ./portals.yml:/app/portals.yml
+      - ./modes/_profile.md:/app/modes/_profile.md
+    restart: unless-stopped

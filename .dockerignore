@@ -1,0 +1,30 @@
+# deps & build artifacts — reinstalled / rebuilt inside the image
+node_modules
+web/node_modules
+web/.next
+web/career-ops.db*
+**/*.bak
+**/*.db
+**/*.db-*
+
+# vcs / tooling / local scratch
+.git
+.gitignore
+.github
+.playwright-mcp
+*.png
+npm-debug.log*
+.DS_Store
+
+# USER LAYER — supplied at runtime via volumes; never bake secrets or personal data into the image
+.env
+.env.*
+data/
+config/
+output/
+reports/
+jds/
+cv.md
+portals.yml
+modes/_profile.md
+writing-samples/
