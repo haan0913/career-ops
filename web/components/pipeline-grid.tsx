@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   ExternalLink,
   MapPin,
@@ -311,6 +312,16 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Lock the background page scroll while the drawer is open — stops the page
+  // from scrolling behind the panel and prevents scroll-chaining past the JD.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const d = daysAgo(job.posted);
   const tone = freshTone(d);
   const loc = jd?.location || job.location || "";
@@ -326,11 +337,14 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
   const googleLink = jd?.googleLink || "";
   const alts = (jd?.applyOptions || []).filter((o) => o.url && o.url !== applyUrl).slice(0, 3);
 
-  return (
+  // Portal to <body> so the fixed overlay is sized by the viewport, not by any
+  // ancestor with a transform (e.g. the page's animate-fadeUp wrapper), which
+  // would otherwise become the containing block and stretch it to full page height.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative flex h-full w-full max-w-2xl flex-col border-l border-white/10 bg-zinc-950 shadow-2xl"
+        className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/10 bg-zinc-950 shadow-2xl"
         style={{ animation: "slideIn 0.3s cubic-bezier(0.22,1,0.36,1) both" }}
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/[0.08] p-5">
@@ -437,7 +451,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Loading job description…
@@ -471,6 +485,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
