@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, Briefcase, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Inbox, Briefcase, KanbanSquare, BarChart3 } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/pipeline", label: "Pipeline", icon: Inbox },
   { href: "/applications", label: "Applications", icon: Briefcase },
+  { href: "/board", label: "Board", icon: KanbanSquare },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
