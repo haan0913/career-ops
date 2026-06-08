@@ -75,9 +75,9 @@ export function StatusBadge({ status }: { status: string }) {
     ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
     : /interview|entrevista/.test(s)
       ? "bg-indigo-500/10 text-indigo-300 ring-indigo-500/20"
-      : /applied|aplicado/.test(s)
+      : /applied|aplicado|responded/.test(s)
         ? "bg-amber-500/10 text-amber-300 ring-amber-500/20"
-        : /reject|descart/.test(s)
+        : /reject|discard|descart/.test(s)
           ? "bg-rose-500/10 text-rose-300 ring-rose-500/20"
           : "bg-white/[0.04] text-zinc-400 ring-white/10";
   return (
