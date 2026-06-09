@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ROOT } from "./paths";
+import { readSnapshot } from "./snapshot";
 
 const run = promisify(execFile);
 
@@ -31,8 +32,17 @@ export type JdResult = {
   error?: string;
 };
 
-// Spawns the repo-root jd-fetch.mjs (tiered: ATS API → JSON-LD → browser render).
+// Snapshot-first: a scan-time snapshot (data/jd) is read IN-PROCESS — no child
+// process, so the common path is instant and immune to `node` spawn failures
+// (the production server can hit STATUS_DLL_INIT_FAILED under Windows process
+// pressure). Only rows WITHOUT a snapshot fall back to spawning jd-fetch.mjs
+// for a live tiered fetch (ATS API → JSON-LD → browser render).
 export async function fetchJd(url: string): Promise<JdResult> {
+  const snap = readSnapshot(url);
+  if (snap && typeof snap.descriptionHtml === "string" && snap.descriptionHtml.length >= 200) {
+    return { ok: true, cached: true, ...snap, url } as JdResult;
+  }
+
   try {
     const { stdout } = await run("node", ["jd-fetch.mjs", url], {
       cwd: ROOT,
