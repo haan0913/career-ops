@@ -17,6 +17,7 @@ import {
 import { fetchJd, type JdResult } from "@/lib/jd";
 import { scoreRole } from "@/lib/actions";
 import { daysAgo, freshLabel, freshTone, workMode, modeTone, scoreTone, type Mode } from "@/lib/fresh";
+import { levelLabel, levelTone, matchesLevel, type Level } from "@/lib/level";
 
 export type CardJob = {
   url: string;
@@ -30,16 +31,19 @@ export type CardJob = {
   logo: string | null;
   apply_url: string | null;
   publisher: string | null;
+  level: string | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
 type AgeFilter = 0 | 7 | 30 | 90;
+type LevelFilter = "all" | "intern" | "entry" | "mid" | "senior" | "leadplus";
 
 export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   const [active, setActive] = useState<CardJob | null>(null);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ModeFilter>("all");
   const [maxAge, setMaxAge] = useState<AgeFilter>(0);
+  const [level, setLevel] = useState<LevelFilter>("all");
 
   const filtered = useMemo(
     () =>
@@ -49,13 +53,14 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
           if (!hay.includes(q.toLowerCase())) return false;
         }
         if (mode !== "all" && workMode(`${j.location ?? ""} ${j.title}`) !== mode) return false;
+        if (!matchesLevel((j.level ?? "") as Level, level)) return false;
         if (maxAge) {
           const d = daysAgo(j.posted);
           if (d === null || d > maxAge) return false;
         }
         return true;
       }),
-    [jobs, q, mode, maxAge],
+    [jobs, q, mode, maxAge, level],
   );
 
   return (
@@ -67,6 +72,8 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
         setMode={setMode}
         maxAge={maxAge}
         setMaxAge={setMaxAge}
+        level={level}
+        setLevel={setLevel}
         count={filtered.length}
         total={jobs.length}
       />
@@ -121,6 +128,8 @@ function FilterBar({
   setMode,
   maxAge,
   setMaxAge,
+  level,
+  setLevel,
   count,
   total,
 }: {
@@ -130,6 +139,8 @@ function FilterBar({
   setMode: (v: ModeFilter) => void;
   maxAge: AgeFilter;
   setMaxAge: (v: AgeFilter) => void;
+  level: LevelFilter;
+  setLevel: (v: LevelFilter) => void;
   count: number;
   total: number;
 }) {
@@ -152,6 +163,18 @@ function FilterBar({
           { label: "Remote", val: "Remote" },
           { label: "Hybrid", val: "Hybrid" },
           { label: "Onsite", val: "Onsite" },
+        ]}
+      />
+      <Segmented<LevelFilter>
+        value={level}
+        onChange={setLevel}
+        options={[
+          { label: "All lvl", val: "all" },
+          { label: "Intern", val: "intern" },
+          { label: "Entry", val: "entry" },
+          { label: "Mid", val: "mid" },
+          { label: "Senior", val: "senior" },
+          { label: "Lead+", val: "leadplus" },
         ]}
       />
       <Segmented<AgeFilter>
@@ -179,6 +202,18 @@ function ModeBadge({ mode }: { mode: Mode }) {
       className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-inset ${modeTone(mode)}`}
     >
       {mode}
+    </span>
+  );
+}
+
+function LevelBadge({ level }: { level: string | null }) {
+  const l = (level ?? "") as Level;
+  if (!l) return null;
+  return (
+    <span
+      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-inset ${levelTone(l)}`}
+    >
+      {levelLabel(l)}
     </span>
   );
 }
@@ -240,6 +275,7 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
+        <LevelBadge level={job.level} />
         {job.salary && <SalaryChip salary={job.salary} />}
         <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums">
           <span className={`size-1.5 rounded-full ${tone.dot}`} />
@@ -371,6 +407,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
                   </span>
                 )}
                 <ModeBadge mode={mode} />
+                <LevelBadge level={job.level} />
               </div>
             </div>
           </div>

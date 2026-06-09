@@ -30,6 +30,7 @@ export type Job = {
   logo: string | null;
   apply_url: string | null;
   publisher: string | null;
+  level: string | null;
 };
 
 // Re-read the md/TSV source of truth into the SQLite projection. Call ONCE per request.

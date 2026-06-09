@@ -3,6 +3,7 @@ import { readFileSync, existsSync, readdirSync } from "fs";
 import path from "path";
 import { DATA, JD_DIR } from "./paths";
 import { sqlite } from "@/db";
+import { classifyLevel } from "./level";
 
 type Snapshot = {
   url: string;
@@ -32,12 +33,17 @@ function loadSnapshots(): Map<string, Snapshot> {
   return map;
 }
 
-function htmlToPreview(html: string | undefined, max = 280): string {
-  const text = String(html || "")
+function plainText(html: string | undefined, max = 4000): string {
+  return String(html || "")
     .replace(/<[^>]+>/g, " ")
     .replace(/&[a-z]+;/gi, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .slice(0, max);
+}
+
+function htmlToPreview(html: string | undefined, max = 280): string {
+  const text = plainText(html, 10_000);
   return text.length > max ? text.slice(0, max).trimEnd() + "…" : text;
 }
 
@@ -98,8 +104,10 @@ function syncPipeline() {
   const meta = scanHistoryMeta();
   const snaps = loadSnapshots();
   const ins = sqlite.prepare(
-    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   );
+  // Classify experience level from the title + the snapshot's full JD text.
+  const levelFor = (title: string, url: string) => classifyLevel(title, plainText(snaps.get(url)?.descriptionHtml));
   // Snapshot fields fall back gracefully: location prefers scan-history then snapshot;
   // apply_url prefers the snapshot's best link then the dedup url.
   const snapCols = (url: string) => {
@@ -122,7 +130,7 @@ function syncPipeline() {
       ins.run(
         m[1], m[2], m[3], m[4] ?? "", "pending", null, null,
         md.location || sc.location, md.source || domainOf(m[1]),
-        sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher,
+        sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
       );
       continue;
     }
@@ -134,7 +142,7 @@ function syncPipeline() {
       ins.run(
         m[2], m[3], m[4], "", "processed", Number(m[1]), m[5],
         md.location || sc.location, md.source || domainOf(m[2]),
-        sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher,
+        sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
       );
       continue;
     }

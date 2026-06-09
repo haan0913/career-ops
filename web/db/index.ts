@@ -29,6 +29,7 @@ for (const col of [
   "logo TEXT",
   "apply_url TEXT", // best apply link (may differ from the dedup url)
   "publisher TEXT", // "via LinkedIn" etc.
+  "level TEXT", // experience level classified from title + JD (intern…exec)
 ]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);
