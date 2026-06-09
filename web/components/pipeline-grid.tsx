@@ -18,6 +18,8 @@ import { fetchJd, type JdResult } from "@/lib/jd";
 import { scoreRole } from "@/lib/actions";
 import { daysAgo, freshLabel, freshTone, workMode, modeTone, scoreTone, type Mode } from "@/lib/fresh";
 import { levelLabel, levelTone, matchesLevel, type Level } from "@/lib/level";
+import { classifyRole, roleLabel, ROLE_FAMILIES, type RoleFamily } from "@/lib/role";
+import { parseSalaryAnnualMin, SALARY_BANDS } from "@/lib/salary";
 
 export type CardJob = {
   url: string;
@@ -37,6 +39,7 @@ export type CardJob = {
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
 type AgeFilter = 0 | 7 | 30 | 90;
 type LevelFilter = "all" | "intern" | "entry" | "mid" | "senior" | "leadplus";
+type RoleFilter = RoleFamily | "all";
 
 export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   const [active, setActive] = useState<CardJob | null>(null);
@@ -44,6 +47,14 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   const [mode, setMode] = useState<ModeFilter>("all");
   const [maxAge, setMaxAge] = useState<AgeFilter>(0);
   const [level, setLevel] = useState<LevelFilter>("all");
+  const [role, setRole] = useState<RoleFilter>("all");
+  const [salaryMin, setSalaryMin] = useState(0);
+  const [company, setCompany] = useState("all");
+
+  const companies = useMemo(
+    () => Array.from(new Set(jobs.map((j) => j.company).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [jobs],
+  );
 
   const filtered = useMemo(
     () =>
@@ -52,28 +63,54 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
           const hay = `${j.title} ${j.company} ${j.location ?? ""} ${j.description ?? ""}`.toLowerCase();
           if (!hay.includes(q.toLowerCase())) return false;
         }
-        if (mode !== "all" && workMode(`${j.location ?? ""} ${j.title}`) !== mode) return false;
+        if (role !== "all" && classifyRole(j.title) !== role) return false;
         if (!matchesLevel((j.level ?? "") as Level, level)) return false;
+        if (salaryMin > 0) {
+          const pay = parseSalaryAnnualMin(j.salary);
+          if (pay === null || pay < salaryMin) return false; // salary filter needs known pay ≥ min
+        }
+        if (mode !== "all" && workMode(`${j.location ?? ""} ${j.title}`) !== mode) return false;
+        if (company !== "all" && j.company !== company) return false;
         if (maxAge) {
           const d = daysAgo(j.posted);
           if (d === null || d > maxAge) return false;
         }
         return true;
       }),
-    [jobs, q, mode, maxAge, level],
+    [jobs, q, role, level, salaryMin, mode, company, maxAge],
   );
+
+  const anyActive = !!q || role !== "all" || level !== "all" || salaryMin > 0 || mode !== "all" || company !== "all" || maxAge > 0;
+  const clearAll = () => {
+    setQ("");
+    setRole("all");
+    setLevel("all");
+    setSalaryMin(0);
+    setMode("all");
+    setCompany("all");
+    setMaxAge(0);
+  };
 
   return (
     <>
       <FilterBar
         q={q}
         setQ={setQ}
-        mode={mode}
-        setMode={setMode}
-        maxAge={maxAge}
-        setMaxAge={setMaxAge}
+        role={role}
+        setRole={setRole}
         level={level}
         setLevel={setLevel}
+        salaryMin={salaryMin}
+        setSalaryMin={setSalaryMin}
+        mode={mode}
+        setMode={setMode}
+        company={company}
+        setCompany={setCompany}
+        companies={companies}
+        maxAge={maxAge}
+        setMaxAge={setMaxAge}
+        anyActive={anyActive}
+        clearAll={clearAll}
         count={filtered.length}
         total={jobs.length}
       />
@@ -95,58 +132,88 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   );
 }
 
-function Segmented<T extends string | number>({
+// A labeled dropdown facet (Indeed/LinkedIn-style). Highlights when set off its
+// default (the first option).
+function FacetSelect({
+  label,
   value,
   onChange,
   options,
 }: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { label: string; val: T }[];
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { label: string; val: string }[];
 }) {
+  const active = options.length > 0 && options[0].val !== value;
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-0.5">
-      {options.map((o) => (
-        <button
-          key={String(o.val)}
-          onClick={() => onChange(o.val)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            value === o.val ? "bg-white/[0.1] text-white shadow-sm" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <label
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+        active
+          ? "border-indigo-400/40 bg-indigo-500/10 text-zinc-100"
+          : "border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20"
+      }`}
+    >
+      <span className="text-zinc-500">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="max-w-[150px] cursor-pointer truncate bg-transparent font-medium text-current outline-none"
+      >
+        {options.map((o) => (
+          <option key={o.val} value={o.val} className="bg-zinc-900 text-zinc-200">
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
 function FilterBar({
   q,
   setQ,
-  mode,
-  setMode,
-  maxAge,
-  setMaxAge,
+  role,
+  setRole,
   level,
   setLevel,
+  salaryMin,
+  setSalaryMin,
+  mode,
+  setMode,
+  company,
+  setCompany,
+  companies,
+  maxAge,
+  setMaxAge,
+  anyActive,
+  clearAll,
   count,
   total,
 }: {
   q: string;
   setQ: (v: string) => void;
-  mode: ModeFilter;
-  setMode: (v: ModeFilter) => void;
-  maxAge: AgeFilter;
-  setMaxAge: (v: AgeFilter) => void;
+  role: RoleFilter;
+  setRole: (v: RoleFilter) => void;
   level: LevelFilter;
   setLevel: (v: LevelFilter) => void;
+  salaryMin: number;
+  setSalaryMin: (v: number) => void;
+  mode: ModeFilter;
+  setMode: (v: ModeFilter) => void;
+  company: string;
+  setCompany: (v: string) => void;
+  companies: string[];
+  maxAge: AgeFilter;
+  setMaxAge: (v: AgeFilter) => void;
+  anyActive: boolean;
+  clearAll: () => void;
   count: number;
   total: number;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-2.5">
-      <div className="flex min-w-[200px] flex-1 items-center gap-2 px-1">
+    <div className="mb-4 space-y-2.5 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-2.5">
+      <div className="flex items-center gap-2 px-1">
         <Search className="size-4 shrink-0 text-zinc-500" />
         <input
           value={q}
@@ -154,43 +221,75 @@ function FilterBar({
           placeholder="Search roles, companies, descriptions…"
           className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
         />
+        <span className="shrink-0 whitespace-nowrap pl-2 font-mono text-xs text-zinc-500">
+          {count}
+          <span className="text-zinc-600"> / {total}</span>
+        </span>
       </div>
-      <Segmented<ModeFilter>
-        value={mode}
-        onChange={setMode}
-        options={[
-          { label: "All", val: "all" },
-          { label: "Remote", val: "Remote" },
-          { label: "Hybrid", val: "Hybrid" },
-          { label: "Onsite", val: "Onsite" },
-        ]}
-      />
-      <Segmented<LevelFilter>
-        value={level}
-        onChange={setLevel}
-        options={[
-          { label: "All lvl", val: "all" },
-          { label: "Intern", val: "intern" },
-          { label: "Entry", val: "entry" },
-          { label: "Mid", val: "mid" },
-          { label: "Senior", val: "senior" },
-          { label: "Lead+", val: "leadplus" },
-        ]}
-      />
-      <Segmented<AgeFilter>
-        value={maxAge}
-        onChange={setMaxAge}
-        options={[
-          { label: "Any", val: 0 },
-          { label: "≤7d", val: 7 },
-          { label: "≤30d", val: 30 },
-          { label: "≤90d", val: 90 },
-        ]}
-      />
-      <span className="ml-auto whitespace-nowrap pr-1 font-mono text-xs text-zinc-500">
-        {count}
-        <span className="text-zinc-600"> / {total}</span>
-      </span>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.05] pt-2.5">
+        <FacetSelect
+          label="Role"
+          value={role}
+          onChange={(v) => setRole(v as RoleFilter)}
+          options={[{ label: "All roles", val: "all" }, ...ROLE_FAMILIES.map((r) => ({ label: roleLabel(r), val: r }))]}
+        />
+        <FacetSelect
+          label="Level"
+          value={level}
+          onChange={(v) => setLevel(v as LevelFilter)}
+          options={[
+            { label: "All levels", val: "all" },
+            { label: "Intern", val: "intern" },
+            { label: "Entry", val: "entry" },
+            { label: "Mid", val: "mid" },
+            { label: "Senior", val: "senior" },
+            { label: "Lead+", val: "leadplus" },
+          ]}
+        />
+        <FacetSelect
+          label="Pay"
+          value={String(salaryMin)}
+          onChange={(v) => setSalaryMin(Number(v))}
+          options={SALARY_BANDS.map((b) => ({ label: b.label, val: String(b.min) }))}
+        />
+        <FacetSelect
+          label="Mode"
+          value={mode}
+          onChange={(v) => setMode(v as ModeFilter)}
+          options={[
+            { label: "Any mode", val: "all" },
+            { label: "Remote", val: "Remote" },
+            { label: "Hybrid", val: "Hybrid" },
+            { label: "Onsite", val: "Onsite" },
+          ]}
+        />
+        <FacetSelect
+          label="Posted"
+          value={String(maxAge)}
+          onChange={(v) => setMaxAge(Number(v) as AgeFilter)}
+          options={[
+            { label: "Any time", val: "0" },
+            { label: "Past week", val: "7" },
+            { label: "Past month", val: "30" },
+            { label: "Past 90 days", val: "90" },
+          ]}
+        />
+        <FacetSelect
+          label="Company"
+          value={company}
+          onChange={setCompany}
+          options={[{ label: "All companies", val: "all" }, ...companies.map((c) => ({ label: c, val: c }))]}
+        />
+        {anyActive && (
+          <button
+            onClick={clearAll}
+            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <X className="size-3.5" /> Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }
