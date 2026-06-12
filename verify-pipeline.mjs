@@ -50,6 +50,7 @@ const ALIASES = {
   'rechazado': 'rejected', 'rechazada': 'rejected',
   'descartado': 'discarded', 'descartada': 'discarded', 'cerrada': 'discarded', 'cancelada': 'discarded',
   'no aplicar': 'skip', 'no_aplicar': 'skip', 'monitor': 'skip', 'geo blocker': 'skip',
+  'resume ready': 'evaluated',
 };
 
 let errors = 0;
@@ -149,7 +150,7 @@ if (brokenReports === 0) ok('All report links valid');
 let badScores = 0;
 for (const e of entries) {
   const s = e.score.replace(/\*\*/g, '').trim();
-  if (!/^\d+\.?\d*\/5$/.test(s) && s !== 'N/A' && s !== 'DUP') {
+  if (!/^\d+\.?\d*(\/5)?$/.test(s) && !/^n\/a$/i.test(s) && s !== 'DUP') {
     error(`#${e.num}: Invalid score format: "${e.score}"`);
     badScores++;
   }

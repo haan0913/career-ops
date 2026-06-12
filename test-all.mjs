@@ -185,11 +185,18 @@ try {
 
 if (!QUICK) {
   console.log('\n4. Dashboard build');
-  const goBuild = run('cd dashboard && go build -o /tmp/career-dashboard-test . 2>&1');
-  if (goBuild !== null) {
-    pass('Dashboard compiles');
+  // A broken Go *toolchain* (corrupted GOROOT stdlib) is an environment
+  // problem, not a project failure — probe it before blaming the dashboard.
+  const goToolchainOk = run('go build std 2>&1') !== null;
+  if (!goToolchainOk) {
+    warn('Go toolchain unusable (go build std fails) — skipping dashboard build');
   } else {
-    fail('Dashboard build failed');
+    const goBuild = run('cd dashboard && go build -o /tmp/career-dashboard-test . 2>&1');
+    if (goBuild !== null) {
+      pass('Dashboard compiles');
+    } else {
+      fail('Dashboard build failed');
+    }
   }
 } else {
   console.log('\n4. Dashboard build (skipped --quick)');
