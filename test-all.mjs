@@ -181,6 +181,24 @@ try {
   t(JSON.stringify(extractJobPostingJsonLd(arr) || {}).includes('2026-05-15'), 'jsonld: handles array-wrapped JobPosting');
 } catch (e) { fail(`jsonld unit tests crashed: ${e.message}`); }
 
+try {
+  const { normalizeLocation, locationVerdict } = await import(pathToFileURL(join(ROOT, 'location.mjs')).href);
+  const t = (cond, msg) => cond ? pass(msg) : fail(msg);
+  t(normalizeLocation('New York, NY').group === 'nyc', 'location: NYC classified');
+  t(normalizeLocation('Jersey City, NJ (Hybrid)').group === 'nyc', 'location: Jersey City → nyc group, hybrid');
+  t(normalizeLocation('Chicago, IL').group === 'chicago', 'location: Chicago classified');
+  t(normalizeLocation('Remote (US)').group === 'remote-us', 'location: Remote US classified');
+  t(normalizeLocation('Remote - EMEA').group === 'remote-foreign', 'location: Remote EMEA is foreign');
+  t(normalizeLocation('Remote - APAC').group === 'remote-foreign', 'location: Remote APAC is foreign');
+  t(normalizeLocation('London, United Kingdom').group === 'foreign', 'location: London is foreign');
+  t(normalizeLocation('Austin, TX').group === 'us-other', 'location: Austin is us-other');
+  t(normalizeLocation('Remote').group === 'unknown', 'location: bare Remote defers to backstop');
+  t(normalizeLocation('Bengaluru, India').group === 'foreign', 'location: Bengaluru not passed by "US" substring');
+  t(locationVerdict('Remote - LATAM').verdict === 'reject', 'verdict: Remote LATAM rejected');
+  t(locationVerdict('New York / London').verdict === 'pass', 'verdict: mixed NY/London passes');
+  t(locationVerdict('Remote').verdict === 'defer', 'verdict: ambiguous Remote defers');
+} catch (e) { fail(`location unit tests crashed: ${e.message}`); }
+
 // ── 4. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {

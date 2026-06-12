@@ -45,6 +45,7 @@ import yaml from 'js-yaml';
 
 import { makeHttpCtx } from './providers/_http.mjs';
 import { writeSnapshot } from './jd-store.mjs';
+import { locationVerdict } from './location.mjs';
 
 const parseYaml = yaml.load;
 
@@ -151,9 +152,16 @@ function buildLocationFilter(locationFilter) {
   if (!locationFilter) return () => true;
   const allow = (locationFilter.allow || []).map(k => k.toLowerCase());
   const block = (locationFilter.block || []).map(k => k.toLowerCase());
+  // Structured pass: `groups` in portals.yml location_filter (default: the
+  // founding user's three lanes). The substring allow/block list below stays
+  // as the backstop for strings the model can't classify.
+  const groups = locationFilter.groups || ['nyc', 'remote-us', 'chicago'];
 
   return (location) => {
     if (!location) return true;
+    const { verdict } = locationVerdict(location, groups);
+    if (verdict === 'pass') return true;
+    if (verdict === 'reject') return false;
     const lower = location.toLowerCase();
     if (block.length > 0 && block.some(k => lower.includes(k))) return false;
     if (allow.length === 0) return true;
