@@ -39,3 +39,20 @@ for (const col of [
     /* column already exists */
   }
 }
+
+// Full-text search over title + company + full JD body. Standalone FTS5 table
+// (not external-content) so sync can repopulate it the same way it rebuilds
+// `jobs`. FTS5 ships in the better-sqlite3 amalgamation; if a build lacks it,
+// fall back to LIKE search (see lib/search.ts).
+export let ftsAvailable = false;
+try {
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS jobs_fts USING fts5(
+      url UNINDEXED, title, company, body,
+      tokenize = 'porter unicode61'
+    );
+  `);
+  ftsAvailable = true;
+} catch {
+  ftsAvailable = false;
+}

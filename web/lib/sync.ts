@@ -2,7 +2,7 @@ import "server-only";
 import { readFileSync, existsSync, readdirSync } from "fs";
 import path from "path";
 import { DATA, JD_DIR } from "./paths";
-import { sqlite } from "@/db";
+import { sqlite, ftsAvailable } from "@/db";
 import { classifyLevel } from "./level";
 
 type Snapshot = {
@@ -123,12 +123,22 @@ function syncPipeline() {
   const f = path.join(DATA, "pipeline.md");
   if (!existsSync(f)) return;
   sqlite.exec("DELETE FROM jobs");
+  if (ftsAvailable) sqlite.exec("DELETE FROM jobs_fts");
   const meta = scanHistoryMeta();
   const snaps = loadSnapshots();
   const canon = loadCanonicalSources();
   const ins = sqlite.prepare(
     "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   );
+  const insFts = ftsAvailable
+    ? sqlite.prepare("INSERT INTO jobs_fts (url,title,company,body) VALUES (?,?,?,?)")
+    : null;
+  // Index the FULL JD body (not the 280-char preview) so search reaches into
+  // responsibilities/qualifications, not just the card summary.
+  const indexFts = (url: string, company: string, title: string) => {
+    if (!insFts) return;
+    insFts.run(url, title, company, plainText(snaps.get(url)?.descriptionHtml, 12_000));
+  };
   const sourceCols = (url: string): [number, string] => {
     const s = canon.get(url);
     return s ? [s.length, JSON.stringify(s)] : [1, "[]"];
@@ -160,6 +170,7 @@ function syncPipeline() {
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
         ...sourceCols(m[1]),
       );
+      indexFts(m[1], m[2], m[3]);
       continue;
     }
     // Processed: - [x] #NNN | url | company | role | score/5 | PDF ...
@@ -173,6 +184,7 @@ function syncPipeline() {
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
         ...sourceCols(m[2]),
       );
+      indexFts(m[2], m[3], m[4]);
       continue;
     }
   }
