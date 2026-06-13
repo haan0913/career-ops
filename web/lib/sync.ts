@@ -33,6 +33,28 @@ function loadSnapshots(): Map<string, Snapshot> {
   return map;
 }
 
+type CanonicalSource = { source: string; url: string; seen: string };
+
+// url -> canonical source history from data/jobs.jsonl (the entity store the
+// engine writes at scan time). Every URL a job was seen on maps to the same
+// canonical record, so cross-posted copies show their full source history.
+function loadCanonicalSources(): Map<string, CanonicalSource[]> {
+  const map = new Map<string, CanonicalSource[]>();
+  const f = path.join(DATA, "jobs.jsonl");
+  if (!existsSync(f)) return map;
+  for (const line of readFileSync(f, "utf-8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const job = JSON.parse(line) as { sources?: CanonicalSource[] };
+      const sources = (job.sources ?? []).map((s) => ({ source: s.source, url: s.url, seen: s.seen }));
+      for (const s of sources) map.set(s.url, sources);
+    } catch {
+      /* skip corrupt line */
+    }
+  }
+  return map;
+}
+
 function plainText(html: string | undefined, max = 4000): string {
   return String(html || "")
     .replace(/<[^>]+>/g, " ")
@@ -103,9 +125,14 @@ function syncPipeline() {
   sqlite.exec("DELETE FROM jobs");
   const meta = scanHistoryMeta();
   const snaps = loadSnapshots();
+  const canon = loadCanonicalSources();
   const ins = sqlite.prepare(
-    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   );
+  const sourceCols = (url: string): [number, string] => {
+    const s = canon.get(url);
+    return s ? [s.length, JSON.stringify(s)] : [1, "[]"];
+  };
   // Classify experience level from the title + the snapshot's full JD text.
   const levelFor = (title: string, url: string) => classifyLevel(title, plainText(snaps.get(url)?.descriptionHtml));
   // Snapshot fields fall back gracefully: location prefers scan-history then snapshot;
@@ -131,6 +158,7 @@ function syncPipeline() {
         m[1], m[2], m[3], m[4] ?? "", "pending", null, null,
         md.location || sc.location, md.source || domainOf(m[1]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
+        ...sourceCols(m[1]),
       );
       continue;
     }
@@ -143,6 +171,7 @@ function syncPipeline() {
         m[2], m[3], m[4], "", "processed", Number(m[1]), m[5],
         md.location || sc.location, md.source || domainOf(m[2]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
+        ...sourceCols(m[2]),
       );
       continue;
     }

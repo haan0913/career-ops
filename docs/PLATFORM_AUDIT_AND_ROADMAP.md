@@ -121,3 +121,19 @@ Documentation Signature
 Updated by: Claude (Fable 5)
 Timestamp: 2026-06-12T00:00:00-04:00 (see git for exact commit time)
 Change summary: Phase 0 deliverable — baseline metrics, competitive parity matrix, current-state audit, target architecture, prioritized roadmap for the job-market-OS evolution.
+
+---
+
+## E. Implemented — Roadmap items 1 & 2 (2026-06-13)
+
+**Item 1 — normalized location model** (`location.mjs`)
+- Before: scan filtered locations by case-insensitive substring against allow/block lists in portals.yml. Fragile: any unlisted foreign-remote phrasing could pass; "US" substring matched unintended strings.
+- After: `normalizeLocation()` classifies raw strings into structured groups (`nyc | chicago | remote-us | us-other | foreign | remote-foreign | unknown`). Scan consults the structured verdict first; the substring allow/block list remains a backstop for `unknown`. portals.yml gains optional `location_filter.groups` (default: the founding user's three lanes).
+- Tests: 14 unit tests (Remote-EMEA/APAC/LATAM rejected; Bengaluru not passed by "US"; bare "Remote" defers; mixed "NY/London" passes).
+
+**Item 2 — canonical job entity + cross-source dedup** (`canonical.mjs`, `jobs-store.mjs`, `jobs-backfill.mjs`)
+- Before: dedup was exact-URL + exact `company::title` string only. The same opening on employer site + LinkedIn + Indeed became separate pipeline rows; no source history.
+- After: every offer reduces to comparable keys (normalized company w/ suffix stripping, normalized title, tracking-param-stripped URL, ATS requisition id, ≥200-char JD hash, city-level location key). `data/jobs.jsonl` holds one canonical record per job with full `sources[]` history and an explainable, reversible `merges[]` log (nothing deleted; every source URL kept). Match rules, strong→weak: url → req-id → desc-hash → title-loc.
+- Backfill seeded 133 canonical jobs from history. Dashboard drawer shows a "Seen on N sources" chip (verified in-browser, screenshot `roadmap2-source-history.png`).
+- **Incorrect-merge defenses** (both found and fixed via real data during this build): boilerplate JDs must not collapse distinct roles — desc-hash/title-loc keys require matching title AND city-level location, not just company+JD. Caught a MongoDB case (7 roles, identical boilerplate, different titles) and a Brex case (same title+JD, Seattle vs Salt Lake City). Final state: 133 canonical jobs, 2 legitimate same-role reposts merged, 0 false merges.
+- Tests: 10 unit tests incl. explicit MongoDB and Brex regression guards. Suite: 124 passed / 0 failed.

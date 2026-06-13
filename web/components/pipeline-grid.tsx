@@ -34,6 +34,8 @@ export type CardJob = {
   apply_url: string | null;
   publisher: string | null;
   level: string | null;
+  sources_count: number | null;
+  sources_json: string | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
@@ -560,6 +562,25 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
             </a>
           )}
         </div>
+
+        {(job.sources_count ?? 1) > 1 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/[0.06] px-5 py-2 text-xs text-zinc-500">
+            <span>Seen on {job.sources_count} sources:</span>
+            {(JSON.parse(job.sources_json || "[]") as { source: string; url: string; seen: string }[]).map((s, i) => (
+              <a
+                key={i}
+                href={s.url}
+                target="_blank"
+                rel="noreferrer"
+                title={`first seen ${s.seen}`}
+                className="inline-flex items-center gap-1 text-zinc-400 hover:text-indigo-300 hover:underline"
+              >
+                {s.source.replace(/-api$/, "")}
+                <ExternalLink className="size-3" />
+              </a>
+            ))}
+          </div>
+        )}
 
         {alts.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/[0.06] px-5 py-2 text-xs text-zinc-500">

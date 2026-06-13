@@ -199,6 +199,36 @@ try {
   t(locationVerdict('Remote').verdict === 'defer', 'verdict: ambiguous Remote defers');
 } catch (e) { fail(`location unit tests crashed: ${e.message}`); }
 
+try {
+  const { normalizeCompany, urlKey, reqIdFromUrl, descHash } = await import(pathToFileURL(join(ROOT, 'canonical.mjs')).href);
+  const { createJobIndex } = await import(pathToFileURL(join(ROOT, 'jobs-store.mjs')).href);
+  const t = (cond, msg) => cond ? pass(msg) : fail(msg);
+  t(normalizeCompany('Compu-Vision Consulting Inc.') === 'compuvision consulting', 'canonical: company suffix stripped');
+  t(normalizeCompany('The Goldman Sachs Group, Inc.') === normalizeCompany('Goldman Sachs Group'), 'canonical: company variants equal');
+  t(urlKey('https://x.com/jobs/1?utm_source=li&gh_src=abc') === urlKey('https://X.com/jobs/1'), 'canonical: tracking params stripped');
+  t(reqIdFromUrl('https://brex.com/careers/8152963002?gh_jid=8152963002') === 'gh:8152963002', 'canonical: greenhouse req id');
+  t(descHash('<p>short</p>') === null, 'canonical: short JD has no hash');
+  const longJd = '<p>' + 'We are seeking a project analyst to coordinate delivery. '.repeat(10) + '</p>';
+  t(descHash(longJd) === descHash(longJd.toUpperCase()), 'canonical: desc hash case-insensitive');
+
+  const idx = createJobIndex([]);
+  const a = idx.upsert({ url: 'https://jobs.acme.com/123?gh_jid=123', title: 'Project Analyst', company: 'Acme Inc.', location: 'New York, NY', source: 'greenhouse-api', descriptionHtml: longJd });
+  t(!a.merged && idx.jobs.length === 1, 'store: first offer creates canonical job');
+  const b = idx.upsert({ url: 'https://www.linkedin.com/jobs/view/999', title: 'Project Analyst', company: 'Acme', location: 'New York City', source: 'jsearch-api', descriptionHtml: longJd });
+  t(b.merged && idx.jobs.length === 1, 'store: aggregator copy merges (not a new job)');
+  t(b.job.sources.length === 2 && b.job.merges[0].reason === 'desc-hash', 'store: source history + merge reason kept');
+  const c = idx.upsert({ url: 'https://jobs.acme.com/777', title: 'Data Engineer', company: 'Acme', location: 'New York, NY', source: 'greenhouse-api' });
+  t(!c.merged && idx.jobs.length === 2, 'store: different role stays separate');
+  // Boilerplate-JD guards: identical JD must NOT merge distinct roles/cities.
+  const idx2 = createJobIndex([]);
+  const boiler = '<p>' + 'Acme is a company that does things across many markets worldwide. '.repeat(8) + '</p>';
+  idx2.upsert({ url: 'https://jobs.acme.com/a1?gh_jid=1', title: 'Program Manager', company: 'Acme', location: 'New York, NY', source: 'greenhouse-api', descriptionHtml: boiler });
+  const diffTitle = idx2.upsert({ url: 'https://jobs.acme.com/a2?gh_jid=2', title: 'Data Analyst', company: 'Acme', location: 'New York, NY', source: 'greenhouse-api', descriptionHtml: boiler });
+  t(!diffTitle.merged && idx2.jobs.length === 2, 'store: same boilerplate JD, different title → not merged (MongoDB guard)');
+  const diffCity = idx2.upsert({ url: 'https://jobs.acme.com/a3?gh_jid=3', title: 'Program Manager', company: 'Acme', location: 'Seattle, Washington, United States', source: 'greenhouse-api', descriptionHtml: boiler });
+  t(!diffCity.merged && idx2.jobs.length === 3, 'store: same JD+title, different city → not merged (Brex guard)');
+} catch (e) { fail(`canonical/store unit tests crashed: ${e.message}`); }
+
 // ── 4. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {

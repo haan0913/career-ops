@@ -30,6 +30,8 @@ for (const col of [
   "apply_url TEXT", // best apply link (may differ from the dedup url)
   "publisher TEXT", // "via LinkedIn" etc.
   "level TEXT", // experience level classified from title + JD (intern…exec)
+  "sources_count INTEGER", // canonical entity store: how many sources carry this job
+  "sources_json TEXT", // [{source,url,seen}] from data/jobs.jsonl for the drawer
 ]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);

@@ -46,6 +46,7 @@ import yaml from 'js-yaml';
 import { makeHttpCtx } from './providers/_http.mjs';
 import { writeSnapshot } from './jd-store.mjs';
 import { locationVerdict } from './location.mjs';
+import { createJobIndex, saveJobs } from './jobs-store.mjs';
 
 const parseYaml = yaml.load;
 
@@ -426,6 +427,10 @@ async function main() {
   // 4. Load dedup sets
   const seenUrls = loadSeenUrls();
   const seenCompanyRoles = loadSeenCompanyRoles();
+  // Canonical entity index (data/jobs.jsonl) — catches cross-source copies the
+  // exact-match sets miss (tracking-param URLs, "Inc." company variants,
+  // identical JDs reposted on aggregators). Merges are recorded, not dropped.
+  const jobIndex = createJobIndex();
 
   // 5. Fetch from each target
   const date = new Date().toISOString().slice(0, 10);
@@ -433,6 +438,7 @@ async function main() {
   let totalFilteredTitle = 0;
   let totalFilteredLocation = 0;
   let totalDupes = 0;
+  let totalMerged = 0;
   const newOffers = [];
   const errors = [...resolveErrors];
 
@@ -462,6 +468,15 @@ async function main() {
         const key = `${job.company.toLowerCase()}::${job.title.toLowerCase()}`;
         if (seenCompanyRoles.has(key)) {
           totalDupes++;
+          continue;
+        }
+        // Cross-source entity resolution: a copy of a job we already track
+        // (different URL, same opening) is merged into the canonical record —
+        // its source is preserved — instead of becoming a new pipeline row.
+        const match = jobIndex.findMatch(job);
+        if (match.job) {
+          jobIndex.upsert({ ...job, source: `${provider.id}-api` }, date);
+          totalMerged++;
           continue;
         }
         // Mark as seen to avoid intra-scan dupes
@@ -543,6 +558,12 @@ async function main() {
     appendToPipeline(verifiedOffers);
     appendToScanHistory(verifiedOffers, date);
   }
+  // 6a. Canonical entity store — every written offer becomes (or merges into)
+  // a canonical job record with full source history in data/jobs.jsonl.
+  if (!dryRun && (verifiedOffers.length > 0 || totalMerged > 0)) {
+    for (const o of verifiedOffers) jobIndex.upsert(o, date);
+    saveJobs(jobIndex.jobs);
+  }
 
   // 6b. JD snapshots — persist the full description + apply metadata the provider
   // captured (jsearch job_description, greenhouse content=true) so the dashboard
@@ -607,6 +628,7 @@ async function main() {
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
   if (maxAgeDays !== null) console.log(`Filtered by age:       ${totalFilteredAge} removed (>${maxAgeDays}d old)`);
   console.log(`Duplicates:            ${totalDupes} skipped`);
+  if (totalMerged > 0) console.log(`Cross-source merges:   ${totalMerged} folded into canonical jobs`);
   if (gatedCount > 0) {
     console.log(`Liveness-gated:        ${gatedCount} ${verify ? '(all)' : '(Tier-2+)'}`);
     console.log(`Expired (dropped):     ${expiredOffers.length}`);
