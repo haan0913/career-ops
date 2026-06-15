@@ -194,6 +194,10 @@ try {
   t(normalizeLocation('Austin, TX').group === 'us-other', 'location: Austin is us-other');
   t(normalizeLocation('Remote').group === 'unknown', 'location: bare Remote defers to backstop');
   t(normalizeLocation('Bengaluru, India').group === 'foreign', 'location: Bengaluru not passed by "US" substring');
+  t(normalizeLocation('Sofia, Bulgaria').group === 'foreign', 'location: Sofia/Bulgaria rejected (was a false-positive)');
+  t(locationVerdict('Sofia, Bulgaria').verdict === 'reject', 'verdict: Sofia/Bulgaria rejected');
+  t(locationVerdict('Bucharest, Romania').verdict === 'reject', 'verdict: Bucharest/Romania rejected');
+  t(normalizeLocation('Lagos, Nigeria').group === 'foreign', 'location: Lagos/Nigeria rejected');
   t(locationVerdict('Remote - LATAM').verdict === 'reject', 'verdict: Remote LATAM rejected');
   t(locationVerdict('New York / London').verdict === 'pass', 'verdict: mixed NY/London passes');
   t(locationVerdict('Remote').verdict === 'defer', 'verdict: ambiguous Remote defers');
