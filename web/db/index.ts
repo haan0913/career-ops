@@ -35,6 +35,8 @@ for (const col of [
   "liveness TEXT", // live | dead | unknown — from data/liveness.jsonl
   "last_verified TEXT", // ISO timestamp of the last liveness check
   "reposted INTEGER", // 1 if the canonical record shows a repost (sources span >14d)
+  "discovered TEXT", // when WE first saw it (scan-history first_seen) — not the posted date
+  "date_confidence TEXT", // high | medium | unknown — trust in the posted date by source
 ]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);

@@ -36,6 +36,8 @@ export type Job = {
   liveness: string | null;
   last_verified: string | null;
   reposted: number | null;
+  discovered: string | null;
+  date_confidence: string | null;
 };
 
 // Re-read the md/TSV source of truth into the SQLite projection. Call ONCE per request.

@@ -39,6 +39,8 @@ export type CardJob = {
   liveness: string | null;
   last_verified: string | null;
   reposted: number | null;
+  discovered: string | null;
+  date_confidence: string | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
@@ -447,6 +449,52 @@ function LivenessChip({ liveness }: { liveness: string | null }) {
   return null;
 }
 
+// Distinct dates, never conflated: when the employer POSTED it, when WE
+// DISCOVERED it, and when liveness was last VERIFIED. Posted carries a
+// confidence tag (high = authoritative ATS date, medium = aggregator).
+function PostingTimeline({ job }: { job: CardJob }) {
+  const fmt = (s: string | null | undefined) => {
+    if (!s) return null;
+    const d = new Date(s.length <= 10 ? `${s}T00:00:00Z` : s);
+    if (Number.isNaN(d.getTime())) return null;
+    const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+    const rel = days <= 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`;
+    return `${s.slice(0, 10)} · ${rel}`;
+  };
+  const posted = fmt(job.posted);
+  const discovered = fmt(job.discovered);
+  const verified = fmt(job.last_verified);
+  if (!posted && !discovered && !verified) return null;
+  const confTone =
+    job.date_confidence === "high" ? "text-emerald-400/80"
+      : job.date_confidence === "medium" ? "text-amber-400/80" : "text-zinc-600";
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-white/[0.06] px-5 py-2.5 text-xs">
+      {posted && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-zinc-500">Posted</span>
+          <span className="text-zinc-300">{posted}</span>
+          {job.date_confidence && job.date_confidence !== "unknown" && (
+            <span className={`text-[10px] uppercase ${confTone}`}>{job.date_confidence}-confidence</span>
+          )}
+        </span>
+      )}
+      {discovered && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-zinc-500">Discovered</span>
+          <span className="text-zinc-400">{discovered}</span>
+        </span>
+      )}
+      {verified && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-zinc-500">Verified</span>
+          <span className="text-zinc-400">{verified}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MetaChip({ icon: Icon, label }: { icon: typeof DollarSign; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-zinc-300 ring-1 ring-inset ring-white/10">
@@ -655,6 +703,8 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
             {jd?.validThrough && <MetaChip icon={CalendarClock} label={`apply by ${jd.validThrough}`} />}
           </div>
         )}
+
+        <PostingTimeline job={job} />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           {loading ? (
