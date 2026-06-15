@@ -1,5 +1,5 @@
 import { sync, getLaneSignal } from "@/lib/data";
-import { searchJobs } from "@/lib/search";
+import { searchJobs, hasExpansion } from "@/lib/search";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
 import { PipelineGrid } from "@/components/pipeline-grid";
@@ -42,6 +42,7 @@ export default async function SearchPage({
           <p className="mb-3 text-xs text-zinc-500">
             {results.length} match{results.length === 1 ? "" : "es"} for{" "}
             <span className="text-zinc-300">{query}</span>
+            {hasExpansion(query) && <span className="text-indigo-300/70"> · including related terms (e.g. acronyms, synonyms)</span>}
           </p>
           <PipelineGrid jobs={results} laneSignal={laneSignal} />
         </>

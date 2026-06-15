@@ -1,5 +1,8 @@
 import "server-only";
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
 import { sqlite } from "@/db";
+import { DATA } from "./paths";
 import { syncAll } from "./sync";
 import { daysAgo } from "./fresh";
 import { parseSalaryAnnualMin } from "./salary";
@@ -160,6 +163,40 @@ export function getLaneSignal(): Record<string, number> {
   const out: Record<string, number> = {};
   for (const l of getLaneOutcomes().lanes) if (l.enough && l.rate !== null) out[l.lane] = l.rate;
   return out;
+}
+
+// Last-visit marker (durable in the meta table) — drives "new since last visit"
+// across browsers/devices, unlike the prior localStorage approach.
+export function getLastVisit(): number {
+  const row = sqlite.prepare("SELECT value FROM meta WHERE key='last_visit'").get() as { value: string } | undefined;
+  const n = row ? Number(row.value) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setLastVisit(ts: number): void {
+  sqlite.prepare("INSERT INTO meta (key,value) VALUES ('last_visit',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(ts));
+}
+
+// In-process source freshness for the command center — reads scan-history.tsv
+// directly instead of spawning source-registry.mjs on every home load (the
+// full registry still powers /sources). Returns providers not seen in `days`.
+export function getStaleSources(days = 21): string[] {
+  const f = path.join(DATA, "scan-history.tsv");
+  if (!existsSync(f)) return [];
+  const lastSeen = new Map<string, string>();
+  for (const line of readFileSync(f, "utf-8").split("\n").slice(1)) {
+    const c = line.split("\t");
+    const provider = (c[2] || "").trim();
+    const seen = (c[1] || "").trim();
+    if (!provider || !seen) continue;
+    if (!lastSeen.has(provider) || seen > lastSeen.get(provider)!) lastSeen.set(provider, seen);
+  }
+  const stale: string[] = [];
+  for (const [provider, seen] of lastSeen) {
+    const d = daysAgo(seen);
+    if (d !== null && d > days) stale.push(provider.replace(/-api$/, ""));
+  }
+  return stale;
 }
 
 // Company intelligence — aggregate the pipeline + applications by employer.

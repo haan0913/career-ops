@@ -1,31 +1,11 @@
 import "server-only";
 import { sqlite, ftsAvailable } from "@/db";
 import type { Job } from "./data";
+import { toFtsQuery, hasExpansion } from "./search-query";
 
-// Turn a free-text query into a safe FTS5 MATCH expression.
-//  - "quoted phrases" are preserved as phrases
-//  - bare words become prefix terms (foo → "foo"*) so partial typing matches
-//  - everything is quoted to neutralize FTS operator characters
-//  - terms are AND-ed (every term must appear), matching user expectation
-// Returns "" when there's nothing searchable (caller then returns no rows).
-export function toFtsQuery(raw: string): string {
-  const text = String(raw || "").trim();
-  if (!text) return "";
-  const parts: string[] = [];
-  const phraseRe = /"([^"]+)"/g;
-  let rest = text;
-  let m: RegExpExecArray | null;
-  while ((m = phraseRe.exec(text))) {
-    const phrase = m[1].replace(/[^a-z0-9 ]/gi, " ").trim();
-    if (phrase) parts.push(`"${phrase}"`);
-  }
-  rest = text.replace(phraseRe, " ");
-  for (const tok of rest.split(/\s+/)) {
-    const clean = tok.replace(/[^a-z0-9#+.]/gi, "");
-    if (clean.length >= 2) parts.push(`"${clean}"*`);
-  }
-  return parts.join(" AND ");
-}
+// Re-export the pure query helpers so existing importers (search page) are
+// unaffected; the construction logic lives in search-query.ts for unit testing.
+export { toFtsQuery, hasExpansion };
 
 // Search the corpus (title + company + full JD body). Uses FTS5 when available,
 // ranked by bm25 with title/company weighted above body; falls back to LIKE over

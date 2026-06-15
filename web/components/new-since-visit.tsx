@@ -2,19 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
+import { markVisited } from "@/lib/actions";
 
 type Lite = { url: string; company: string; title: string; discovered: string | null };
 
-// "What changed since my last visit." Uses localStorage to remember the last
-// time this page was opened, counts jobs discovered since, then advances the
-// marker. Client-only so the boundary is truly per-user, not a server guess.
+// "What changed since my last visit." The boundary is persisted server-side
+// (meta table) via markVisited, so it survives across browsers/devices: the
+// action returns the PREVIOUS visit time, then advances the marker to now.
 export function NewSinceVisit({ jobs }: { jobs: Lite[] }) {
   const [since, setSince] = useState<number | null>(null);
 
   useEffect(() => {
-    const prev = Number(localStorage.getItem("careerops:lastVisit") || 0);
-    setSince(prev);
-    localStorage.setItem("careerops:lastVisit", String(Date.now()));
+    let active = true;
+    markVisited().then((prev) => { if (active) setSince(prev); }).catch(() => { if (active) setSince(0); });
+    return () => { active = false; };
   }, []);
 
   if (since === null) return null; // first paint, before we know the boundary

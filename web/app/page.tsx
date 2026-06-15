@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Zap, MapPin, AlertTriangle, Radio } from "lucide-react";
-import { sync, getStats, getApplyQueue, getFollowUps, getPipeline } from "@/lib/data";
-import { getRegistry } from "@/lib/sources";
+import { sync, getStats, getApplyQueue, getFollowUps, getPipeline, getStaleSources } from "@/lib/data";
 import { StatCard, Card, SectionHeader, StatusBadge, PageHeader, EmptyState } from "@/components/ui";
 import { ScanBar } from "@/components/scan-bar";
 import { NewSinceVisit } from "@/components/new-since-visit";
@@ -26,11 +25,9 @@ export default async function Overview() {
     .filter((j) => j.liveness !== "dead" && (j.fit_label === "Apply immediately" || j.fit_label === "Strong application") && recentlyDiscovered(j))
     .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
     .slice(0, 6);
-  const reg = await getRegistry();
-  // Distinguish "registry came back empty" (subprocess unavailable) from a
-  // genuine all-fresh state, so the panel never claims health it didn't check.
-  const registryOk = reg.summary.providers > 0;
-  const staleSources = reg.providers.filter((p) => p.health === "stale");
+  // In-process (no subprocess spawn) — reads scan-history directly. The full
+  // registry with contribution stats still lives on /sources.
+  const staleSources = getStaleSources();
   const liteJobs = pending.map((j) => ({ url: j.url, company: j.company, title: j.title, discovered: j.discovered }));
 
   return (
@@ -149,11 +146,9 @@ export default async function Overview() {
                 tone={staleSources.length ? "amber" : "ok"}
                 icon={Radio}
                 label={
-                  !registryOk
-                    ? "Source health unavailable — open Sources to refresh"
-                    : staleSources.length
-                      ? `${staleSources.length} source${staleSources.length === 1 ? "" : "s"} stale: ${staleSources.map((p) => p.id).slice(0, 2).join(", ")}`
-                      : "All active sources fresh"
+                  staleSources.length
+                    ? `${staleSources.length} source${staleSources.length === 1 ? "" : "s"} stale: ${staleSources.slice(0, 2).join(", ")}`
+                    : "All active sources fresh"
                 }
               />
               <Link href="/sources" className="block pt-1 text-xs text-zinc-500 hover:text-zinc-300">

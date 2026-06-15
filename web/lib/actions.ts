@@ -3,8 +3,17 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ROOT } from "./paths";
+import { getLastVisit, setLastVisit } from "./data";
 
 const run = promisify(execFile);
+
+// Returns the PREVIOUS last-visit timestamp, then advances it to now — so the
+// command center can highlight what's new since the prior visit (cross-device).
+export async function markVisited(): Promise<number> {
+  const prev = getLastVisit();
+  setLastVisit(Date.now());
+  return prev;
+}
 
 // Server actions spawn the existing hardened CLIs from the repo root (reusing its
 // node_modules, .env, model cache, and the tier-aware liveness gate) — no logic is

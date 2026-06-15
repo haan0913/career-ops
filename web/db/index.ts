@@ -18,6 +18,8 @@ sqlite.exec(`
     url TEXT UNIQUE, company TEXT, title TEXT, posted TEXT,
     state TEXT, report_num INTEGER, score TEXT
   );
+  -- Durable key/value (NOT cleared by sync) — e.g. last-visit timestamp.
+  CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 `);
 
 // Additive migrations — older projection files predate these columns.
