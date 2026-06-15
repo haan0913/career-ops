@@ -36,6 +36,9 @@ export type CardJob = {
   level: string | null;
   sources_count: number | null;
   sources_json: string | null;
+  liveness: string | null;
+  last_verified: string | null;
+  reposted: number | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
@@ -52,13 +55,15 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
   const [role, setRole] = useState<RoleFilter>("all");
   const [salaryMin, setSalaryMin] = useState(0);
   const [company, setCompany] = useState("all");
+  const [showClosed, setShowClosed] = useState(false);
 
   const companies = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.company).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [jobs],
   );
 
-  const filtered = useMemo(
+  // Everything matching the user's facets, ignoring liveness.
+  const filteredAll = useMemo(
     () =>
       jobs.filter((j) => {
         if (q) {
@@ -80,6 +85,13 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
         return true;
       }),
     [jobs, q, role, level, salaryMin, mode, company, maxAge],
+  );
+
+  // Dead listings are hidden from the default view (reversible — toggle to show).
+  const deadHidden = useMemo(() => filteredAll.filter((j) => j.liveness === "dead").length, [filteredAll]);
+  const filtered = useMemo(
+    () => (showClosed ? filteredAll : filteredAll.filter((j) => j.liveness !== "dead")),
+    [filteredAll, showClosed],
   );
 
   const anyActive = !!q || role !== "all" || level !== "all" || salaryMin > 0 || mode !== "all" || company !== "all" || maxAge > 0;
@@ -116,6 +128,16 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
         count={filtered.length}
         total={jobs.length}
       />
+
+      {deadHidden > 0 && (
+        <button
+          onClick={() => setShowClosed((v) => !v)}
+          className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+        >
+          <span className="size-1.5 rounded-full bg-rose-400/80" />
+          {showClosed ? `Hide ${deadHidden} closed` : `${deadHidden} closed hidden — show`}
+        </button>
+      )}
 
       {filtered.length === 0 ? (
         <div className="grid place-items-center rounded-xl border border-dashed border-white/[0.08] bg-zinc-900/20 p-12 text-sm text-zinc-500">
@@ -378,6 +400,12 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <LevelBadge level={job.level} />
         {job.salary && <SalaryChip salary={job.salary} />}
+        <LivenessChip liveness={job.liveness} />
+        {job.reposted === 1 && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300/90 ring-1 ring-inset ring-amber-500/20">
+            reposted
+          </span>
+        )}
         <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums">
           <span className={`size-1.5 rounded-full ${tone.dot}`} />
           <span className={tone.text}>{freshLabel(d)}</span>
@@ -397,6 +425,26 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       </div>
     </button>
   );
+}
+
+// Liveness status chip. 'live' is left unmarked (the default, no visual noise);
+// only dead/unknown earn a chip so the eye goes to what needs attention.
+function LivenessChip({ liveness }: { liveness: string | null }) {
+  if (liveness === "dead") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-rose-300 ring-1 ring-inset ring-rose-500/25">
+        closed
+      </span>
+    );
+  }
+  if (liveness === "unknown") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500 ring-1 ring-inset ring-white/10">
+        unverified
+      </span>
+    );
+  }
+  return null;
 }
 
 function MetaChip({ icon: Icon, label }: { icon: typeof DollarSign; label: string }) {

@@ -34,12 +34,14 @@ function loadSnapshots(): Map<string, Snapshot> {
 }
 
 type CanonicalSource = { source: string; url: string; seen: string };
+type CanonicalInfo = { sources: CanonicalSource[]; reposted: boolean };
 
-// url -> canonical source history from data/jobs.jsonl (the entity store the
-// engine writes at scan time). Every URL a job was seen on maps to the same
-// canonical record, so cross-posted copies show their full source history.
-function loadCanonicalSources(): Map<string, CanonicalSource[]> {
-  const map = new Map<string, CanonicalSource[]>();
+// url -> canonical record info from data/jobs.jsonl (the entity store the engine
+// writes at scan time). Every URL a job was seen on maps to the same record, so
+// cross-posted copies show their full source history; `reposted` is set when the
+// record's sightings span more than 14 days (a re-post after closure/rejection).
+function loadCanonicalSources(): Map<string, CanonicalInfo> {
+  const map = new Map<string, CanonicalInfo>();
   const f = path.join(DATA, "jobs.jsonl");
   if (!existsSync(f)) return map;
   for (const line of readFileSync(f, "utf-8").split("\n")) {
@@ -47,7 +49,30 @@ function loadCanonicalSources(): Map<string, CanonicalSource[]> {
     try {
       const job = JSON.parse(line) as { sources?: CanonicalSource[] };
       const sources = (job.sources ?? []).map((s) => ({ source: s.source, url: s.url, seen: s.seen }));
-      for (const s of sources) map.set(s.url, sources);
+      const seenDates = sources.map((s) => Date.parse(s.seen)).filter((n) => Number.isFinite(n));
+      const spanDays = seenDates.length > 1 ? (Math.max(...seenDates) - Math.min(...seenDates)) / 86_400_000 : 0;
+      const info: CanonicalInfo = { sources, reposted: spanDays > 14 };
+      for (const s of sources) map.set(s.url, info);
+    } catch {
+      /* skip corrupt line */
+    }
+  }
+  return map;
+}
+
+type LivenessRec = { status: string; lastVerified?: string };
+
+// url -> liveness verdict from data/liveness.jsonl (seeded + sweep-updated by
+// the engine). Drives the status chip and the auto-hide-dead default view.
+function loadLivenessMap(): Map<string, LivenessRec> {
+  const map = new Map<string, LivenessRec>();
+  const f = path.join(DATA, "liveness.jsonl");
+  if (!existsSync(f)) return map;
+  for (const line of readFileSync(f, "utf-8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line) as { url?: string; status?: string; lastVerified?: string };
+      if (r.url) map.set(r.url, { status: r.status ?? "unknown", lastVerified: r.lastVerified });
     } catch {
       /* skip corrupt line */
     }
@@ -127,8 +152,9 @@ function syncPipeline() {
   const meta = scanHistoryMeta();
   const snaps = loadSnapshots();
   const canon = loadCanonicalSources();
+  const liveness = loadLivenessMap();
   const ins = sqlite.prepare(
-    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json,liveness,last_verified,reposted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   );
   const insFts = ftsAvailable
     ? sqlite.prepare("INSERT INTO jobs_fts (url,title,company,body) VALUES (?,?,?,?)")
@@ -139,9 +165,17 @@ function syncPipeline() {
     if (!insFts) return;
     insFts.run(url, title, company, plainText(snaps.get(url)?.descriptionHtml, 12_000));
   };
-  const sourceCols = (url: string): [number, string] => {
-    const s = canon.get(url);
-    return s ? [s.length, JSON.stringify(s)] : [1, "[]"];
+  // sources_count, sources_json, liveness, last_verified, reposted — keyed by URL.
+  const extraCols = (url: string): [number, string, string, string | null, number] => {
+    const c = canon.get(url);
+    const lv = liveness.get(url);
+    return [
+      c ? c.sources.length : 1,
+      c ? JSON.stringify(c.sources) : "[]",
+      lv?.status ?? "unknown",
+      lv?.lastVerified ?? null,
+      c?.reposted ? 1 : 0,
+    ];
   };
   // Classify experience level from the title + the snapshot's full JD text.
   const levelFor = (title: string, url: string) => classifyLevel(title, plainText(snaps.get(url)?.descriptionHtml));
@@ -168,7 +202,7 @@ function syncPipeline() {
         m[1], m[2], m[3], m[4] ?? "", "pending", null, null,
         md.location || sc.location, md.source || domainOf(m[1]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
-        ...sourceCols(m[1]),
+        ...extraCols(m[1]),
       );
       indexFts(m[1], m[2], m[3]);
       continue;
@@ -182,7 +216,7 @@ function syncPipeline() {
         m[2], m[3], m[4], "", "processed", Number(m[1]), m[5],
         md.location || sc.location, md.source || domainOf(m[2]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
-        ...sourceCols(m[2]),
+        ...extraCols(m[2]),
       );
       indexFts(m[2], m[3], m[4]);
       continue;

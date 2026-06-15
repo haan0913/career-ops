@@ -33,6 +33,9 @@ export type Job = {
   level: string | null;
   sources_count: number | null;
   sources_json: string | null;
+  liveness: string | null;
+  last_verified: string | null;
+  reposted: number | null;
 };
 
 // Re-read the md/TSV source of truth into the SQLite projection. Call ONCE per request.

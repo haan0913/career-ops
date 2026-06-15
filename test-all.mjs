@@ -240,6 +240,17 @@ try {
   t(reg.providers.every(p => p.unique <= p.contributed), 'registry: unique never exceeds contributed');
 } catch (e) { fail(`source-registry unit tests crashed: ${e.message}`); }
 
+try {
+  const { setVerdict } = await import(pathToFileURL(join(ROOT, 'liveness-store.mjs')).href);
+  const t = (cond, msg) => cond ? pass(msg) : fail(msg);
+  const m = new Map();
+  setVerdict(m, 'https://x.com/1', 'dead', 'expired', 'scan-history', '2026-06-01T00:00:00Z');
+  t(m.get('https://x.com/1').status === 'dead', 'liveness: setVerdict records status');
+  t(m.get('https://x.com/1').lastVerified === '2026-06-01T00:00:00Z', 'liveness: setVerdict keeps timestamp');
+  setVerdict(m, 'https://x.com/1', 'live', 're-verified', 'sweep');
+  t(m.get('https://x.com/1').status === 'live', 'liveness: re-verify overwrites verdict');
+} catch (e) { fail(`liveness unit tests crashed: ${e.message}`); }
+
 // ── 4. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {

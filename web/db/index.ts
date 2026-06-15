@@ -32,6 +32,9 @@ for (const col of [
   "level TEXT", // experience level classified from title + JD (intern…exec)
   "sources_count INTEGER", // canonical entity store: how many sources carry this job
   "sources_json TEXT", // [{source,url,seen}] from data/jobs.jsonl for the drawer
+  "liveness TEXT", // live | dead | unknown — from data/liveness.jsonl
+  "last_verified TEXT", // ISO timestamp of the last liveness check
+  "reposted INTEGER", // 1 if the canonical record shows a repost (sources span >14d)
 ]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);

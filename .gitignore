@@ -5,6 +5,7 @@ data/pipeline.md
 data/scan-history.tsv
 data/scan-runs.tsv
 data/jobs.jsonl
+data/liveness.jsonl
 data/jd/
 data/*.bak
 data/parser-output/**/*.json
