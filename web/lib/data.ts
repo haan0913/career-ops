@@ -4,6 +4,7 @@ import { syncAll } from "./sync";
 import { daysAgo } from "./fresh";
 import { parseSalaryAnnualMin } from "./salary";
 import { matchesLevel, type Level } from "./level";
+import { classifyRole, roleLabel, type RoleFamily } from "./role";
 
 export type App = {
   number: number;
@@ -94,6 +95,69 @@ export function getFollowUps(): App[] {
   return (sqlite.prepare("SELECT * FROM applications ORDER BY date DESC").all() as App[]).filter((a) =>
     /applied|aplicad|respond|interview|entrevista|screen/.test((a.status || "").toLowerCase()),
   );
+}
+
+// Outcome-learning loop. Aggregates real application outcomes by role-family
+// "lane" so ranking can eventually favor what actually converts FOR AMIR. The
+// mandate is explicit: never learn blindly from sparse outcomes — every lane
+// carries its sample size and an `enough` flag, and the signal stays dormant
+// (rate=null) until a lane has MIN_SAMPLE *resolved* applications.
+const MIN_SAMPLE = 4; // applications in a lane before its conversion is trusted
+
+export type LaneOutcome = {
+  lane: RoleFamily;
+  label: string;
+  applied: number; // resolved applications in this lane (sent, got an answer or rejection)
+  positive: number; // responded / interview / offer
+  rate: number | null; // positive/applied, only when `enough`
+  enough: boolean;
+};
+
+export type Outcomes = {
+  lanes: LaneOutcome[];
+  totalApplied: number;
+  totalPositive: number;
+  dataReady: boolean; // any lane has enough to inform ranking
+};
+
+const POSITIVE_RE = /respond|interview|entrevista|offer|oferta|screen/;
+const RESOLVED_RE = /applied|aplicad|respond|interview|entrevista|offer|oferta|screen|reject|rechaz/;
+
+export function getLaneOutcomes(): Outcomes {
+  const apps = sqlite.prepare("SELECT role, status FROM applications").all() as { role: string; status: string }[];
+  const byLane = new Map<RoleFamily, { applied: number; positive: number }>();
+  for (const a of apps) {
+    const status = (a.status || "").toLowerCase();
+    if (!RESOLVED_RE.test(status)) continue; // ignore not-yet-sent (evaluated/skip/discarded)
+    const lane = classifyRole(a.role || "");
+    const cur = byLane.get(lane) || { applied: 0, positive: 0 };
+    cur.applied += 1;
+    if (POSITIVE_RE.test(status)) cur.positive += 1;
+    byLane.set(lane, cur);
+  }
+  const lanes: LaneOutcome[] = [...byLane.entries()]
+    .map(([lane, v]) => ({
+      lane,
+      label: roleLabel(lane),
+      applied: v.applied,
+      positive: v.positive,
+      enough: v.applied >= MIN_SAMPLE,
+      rate: v.applied >= MIN_SAMPLE ? v.positive / v.applied : null,
+    }))
+    .sort((a, b) => b.applied - a.applied);
+  return {
+    lanes,
+    totalApplied: lanes.reduce((n, l) => n + l.applied, 0),
+    totalPositive: lanes.reduce((n, l) => n + l.positive, 0),
+    dataReady: lanes.some((l) => l.enough),
+  };
+}
+
+// Compact lane→rate map for the fit nudge (only lanes with enough data).
+export function getLaneSignal(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of getLaneOutcomes().lanes) if (l.enough && l.rate !== null) out[l.lane] = l.rate;
+  return out;
 }
 
 export function getPipeline(state: "pending" | "processed" | "all" = "pending"): Job[] {

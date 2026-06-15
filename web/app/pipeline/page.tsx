@@ -1,4 +1,4 @@
-import { sync, getPipeline } from "@/lib/data";
+import { sync, getPipeline, getLaneSignal } from "@/lib/data";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { ScanBar } from "@/components/scan-bar";
 import { PipelineGrid } from "@/components/pipeline-grid";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default function Pipeline() {
   sync();
   const jobs = getPipeline("pending");
+  const laneSignal = getLaneSignal();
 
   return (
     <div className="animate-fadeUp">
@@ -21,7 +22,7 @@ export default function Pipeline() {
       {jobs.length === 0 ? (
         <EmptyState>Nothing in the pipeline. Run a scan to populate it.</EmptyState>
       ) : (
-        <PipelineGrid jobs={jobs} />
+        <PipelineGrid jobs={jobs} laneSignal={laneSignal} />
       )}
     </div>
   );

@@ -49,7 +49,7 @@ type AgeFilter = 0 | 7 | 30 | 90;
 type LevelFilter = "all" | "intern" | "entry" | "mid" | "senior" | "leadplus";
 type RoleFilter = RoleFamily | "all";
 
-export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
+export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal?: Record<string, number> }) {
   const [active, setActive] = useState<CardJob | null>(null);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ModeFilter>("all");
@@ -154,7 +154,7 @@ export function PipelineGrid({ jobs }: { jobs: CardJob[] }) {
         </div>
       )}
 
-      {active && <JobDrawer job={active} onClose={() => setActive(null)} />}
+      {active && <JobDrawer job={active} laneSignal={laneSignal} onClose={() => setActive(null)} />}
     </>
   );
 }
@@ -499,8 +499,8 @@ function PostingTimeline({ job }: { job: CardJob }) {
 // Explainable fit/winnability — deterministic (no API cost). Separate scored
 // components + a calibrated label + concerns, grounded in Amir's archetypes and
 // proof points. Recomputed when the JD loads so evidence/degree reflect the body.
-function FitPanel({ job, jdHtml }: { job: CardJob; jdHtml?: string | null }) {
-  const fit = useMemo(() => computeFit(job, jdHtml), [job, jdHtml]);
+function FitPanel({ job, jdHtml, laneSignal }: { job: CardJob; jdHtml?: string | null; laneSignal?: Record<string, number> }) {
+  const fit = useMemo(() => computeFit(job, jdHtml, laneSignal), [job, jdHtml, laneSignal]);
   const toneRing: Record<string, string> = {
     good: "text-emerald-300 bg-emerald-500/10 ring-emerald-500/25",
     ok: "text-amber-200 bg-amber-500/10 ring-amber-500/20",
@@ -572,7 +572,7 @@ function hostLabel(url: string): string {
   }
 }
 
-function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
+function JobDrawer({ job, onClose, laneSignal }: { job: CardJob; onClose: () => void; laneSignal?: Record<string, number> }) {
   const [jd, setJd] = useState<JdResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [score, setScore] = useState<number | null>(null);
@@ -760,7 +760,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
         <PostingTimeline job={job} />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
-          <FitPanel job={job} jdHtml={jd?.descriptionHtml} />
+          <FitPanel job={job} jdHtml={jd?.descriptionHtml} laneSignal={laneSignal} />
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Loading job description…

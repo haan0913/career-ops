@@ -68,7 +68,7 @@ export function computeFit(job: {
   level?: string | null;
   posted?: string | null;
   liveness?: string | null;
-}, jdHtml?: string | null): FitAnalysis {
+}, jdHtml?: string | null, laneSignal?: Record<string, number>): FitAnalysis {
   const text = plain(jdHtml || "");
   const components: FitComponent[] = [];
   const concerns: string[] = [];
@@ -115,6 +115,16 @@ export function computeFit(job: {
   // Degree flexibility (important: Amir has no bachelor's)
   const degree = degreeFlexibility(text);
   if (degree === "strict") concerns.push("appears to strictly require a bachelor's — you have a Year Up cert + coursework");
+
+  // Outcome-learning nudge — small, capped, transparent. Only fires when this
+  // role's lane has accumulated enough RESOLVED applications (see getLaneSignal);
+  // until then laneSignal omits the lane and nothing changes.
+  const laneRate = laneSignal?.[role];
+  if (laneRate !== undefined) {
+    if (laneRate >= 0.3) { score += 5; components.push({ key: "track", label: "Your track record", tone: "good", note: `${role} applications convert well (${Math.round(laneRate * 100)}%)` }); }
+    else if (laneRate <= 0.05) { score -= 5; components.push({ key: "track", label: "Your track record", tone: "warn", note: `${role} applications haven't converted yet` }); }
+    else { components.push({ key: "track", label: "Your track record", tone: "ok", note: `${role} converts ~${Math.round(laneRate * 100)}%` }); }
+  }
 
   score = Math.max(0, Math.min(100, score));
   let overall: string, tone: FitAnalysis["tone"];

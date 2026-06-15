@@ -1,4 +1,4 @@
-import { sync } from "@/lib/data";
+import { sync, getLaneSignal } from "@/lib/data";
 import { searchJobs } from "@/lib/search";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { SearchBox } from "@/components/search-box";
@@ -15,6 +15,7 @@ export default async function SearchPage({
   sync();
   const query = q.trim();
   const results = query ? searchJobs(query) : [];
+  const laneSignal = getLaneSignal();
 
   return (
     <div className="animate-fadeUp">
@@ -42,7 +43,7 @@ export default async function SearchPage({
             {results.length} match{results.length === 1 ? "" : "es"} for{" "}
             <span className="text-zinc-300">{query}</span>
           </p>
-          <PipelineGrid jobs={results} />
+          <PipelineGrid jobs={results} laneSignal={laneSignal} />
         </>
       )}
     </div>

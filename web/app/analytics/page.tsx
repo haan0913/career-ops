@@ -4,6 +4,7 @@ import {
   getStatusDistribution,
   getFreshnessBuckets,
   getTopCompanies,
+  getLaneOutcomes,
 } from "@/lib/data";
 import { Card, SectionHeader, Bar, PageHeader, StatusBadge } from "@/components/ui";
 
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 export default function Analytics() {
   sync();
   const s = getStats();
+  const outcomes = getLaneOutcomes();
   const status = getStatusDistribution();
   const fresh = getFreshnessBuckets();
   const companies = getTopCompanies(8);
@@ -104,6 +106,42 @@ export default function Analytics() {
                 </div>
               ))}
             </div>
+          )}
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <SectionHeader title="What's converting — by lane" />
+          {outcomes.totalApplied === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No sent applications resolved yet. Once you log responses, interviews, and rejections in the tracker,
+              this learns which lanes convert and feeds the fit ranking.
+            </p>
+          ) : (
+            <>
+              {!outcomes.dataReady && (
+                <p className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200/90">
+                  Tentative — only {outcomes.totalApplied} resolved application{outcomes.totalApplied === 1 ? "" : "s"} so far.
+                  No lane has reached the sample size needed to influence ranking yet; shown for visibility only.
+                </p>
+              )}
+              <div className="space-y-3">
+                {outcomes.lanes.map((l) => (
+                  <div key={l.lane} className="flex items-center gap-3 text-sm">
+                    <span className="w-44 shrink-0 truncate text-zinc-300">{l.label}</span>
+                    <div className="flex-1">
+                      <Bar value={l.positive} max={Math.max(1, l.applied)} tone="bg-emerald-500" />
+                    </div>
+                    <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-zinc-400">
+                      {l.positive}/{l.applied} {l.enough ? `· ${Math.round((l.rate ?? 0) * 100)}%` : "· n/a"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-zinc-600">
+                &ldquo;Positive&rdquo; = responded, screened, interviewed, or offered. A lane needs ≥4 resolved applications
+                before its rate is trusted enough to nudge the fit score.
+              </p>
+            </>
           )}
         </Card>
       </div>
