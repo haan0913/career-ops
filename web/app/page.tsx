@@ -15,6 +15,17 @@ export default async function Overview() {
   const followUps = getFollowUps().slice(0, 6);
   const pending = getPipeline("pending");
   const deadHidden = pending.filter((j) => j.liveness === "dead").length;
+  // Strong new matches = freshly discovered AND top-fit — the highest-signal
+  // callout. Discovery (when WE found it) within 3 days, not the posted date.
+  const recentlyDiscovered = (j: { discovered: string | null }) => {
+    if (!j.discovered) return false;
+    const t = Date.parse(j.discovered.length <= 10 ? `${j.discovered}T00:00:00Z` : j.discovered);
+    return Number.isFinite(t) && Date.now() - t <= 3 * 86_400_000;
+  };
+  const strongNew = pending
+    .filter((j) => j.liveness !== "dead" && (j.fit_label === "Apply immediately" || j.fit_label === "Strong application") && recentlyDiscovered(j))
+    .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
+    .slice(0, 6);
   const reg = await getRegistry();
   // Distinguish "registry came back empty" (subprocess unavailable) from a
   // genuine all-fresh state, so the panel never claims health it didn't check.
@@ -38,6 +49,25 @@ export default async function Overview() {
       <div className="mt-6">
         <NewSinceVisit jobs={liteJobs} />
       </div>
+
+      {strongNew.length > 0 && (
+        <div className="mt-6 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.05] p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-200">
+            <Zap className="size-4" />
+            {strongNew.length} strong new match{strongNew.length === 1 ? "" : "es"} — fresh and top-fit
+          </div>
+          <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+            {strongNew.map((j) => (
+              <li key={j.url} className="flex items-center justify-between gap-2 text-xs">
+                <a href={j.apply_url || j.url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-zinc-300 hover:text-emerald-200 hover:underline">
+                  <span className="font-medium text-zinc-100">{j.company}</span> · {j.title}
+                </a>
+                <span className="shrink-0 font-mono text-emerald-300/70">{j.fit_score}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
