@@ -159,3 +159,8 @@ Change summary: Phase 0 deliverable — baseline metrics, competitive parity mat
 - Before: UI showed a single freshness label off `posted` and conflated it with discovery; no date-confidence; "posted today" and "we found it today" were indistinguishable.
 - After: three distinct dates projected and surfaced — **Posted** (employer's date), **Discovered** (our scan-history first_seen), **Verified** (last liveness check) — in a drawer posting-timeline. Posted carries a **date-confidence** tag: high (authoritative ATS date), medium (aggregator), unknown (no date). Verified in data: a role posted 2026-06-02 but discovered 2026-06-05 now reads as two separate dates, not one.
 - Confidence distribution on current corpus: 22 high / 20 medium / 114 unknown. Screenshot `roadmap6-freshness.png`.
+
+**Item 7 — command-center home** (`web/app/page.tsx`, `web/lib/data.ts`, `web/components/new-since-visit.tsx`)
+- Before: Overview was a passive "at a glance" (stat tiles + a flat fresh-roles list).
+- After: a true command center answering "what now?" — **Apply-first queue** (top 8 live pending roles ranked by a deterministic, explainable priority: freshness + pay-in-range + level-fit + date-confidence + verified-live, each shown with its reasons — no API cost), **New since last visit** (client localStorage boundary, counts roles discovered since you last opened it), **Follow-ups due** (applications awaiting a reply), and **Needs attention** (closed-listings hidden count + stale-source warnings linking to /sources).
+- The apply-first ranking is `getApplyQueue()` in data.ts — the deterministic groundwork for roadmap item 8 (it already emits per-job reasons). Verified all sections render in-browser. Screenshot `roadmap7-command-center.png`.

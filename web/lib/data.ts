@@ -2,6 +2,8 @@ import "server-only";
 import { sqlite } from "@/db";
 import { syncAll } from "./sync";
 import { daysAgo } from "./fresh";
+import { parseSalaryAnnualMin } from "./salary";
+import { matchesLevel, type Level } from "./level";
 
 export type App = {
   number: number;
@@ -47,6 +49,51 @@ export function sync() {
 
 export function getApplications(): App[] {
   return sqlite.prepare("SELECT * FROM applications ORDER BY number DESC").all() as App[];
+}
+
+// Deterministic "apply first" priority — no API cost. Scores live, in-pipeline
+// roles on freshness, pay-in-range, level-fit, and date confidence, and returns
+// the reasons so the recommendation is explainable (not one opaque number).
+export type RankedJob = { job: Job; score: number; reasons: string[] };
+
+export function getApplyQueue(limit = 8): RankedJob[] {
+  const jobs = sqlite
+    .prepare("SELECT * FROM jobs WHERE state='pending' AND (liveness IS NULL OR liveness != 'dead')")
+    .all() as Job[];
+
+  const ranked = jobs.map((job): RankedJob => {
+    let score = 0;
+    const reasons: string[] = [];
+
+    const d = daysAgo(job.posted);
+    if (d !== null && d <= 3) { score += 3; reasons.push("posted in last 3 days"); }
+    else if (d !== null && d <= 7) { score += 2; reasons.push("posted this week"); }
+    else if (d !== null && d <= 14) { score += 1; }
+
+    const pay = parseSalaryAnnualMin(job.salary);
+    if (pay !== null && pay >= 70_000) { score += 2; reasons.push(`pay from $${Math.round(pay / 1000)}k`); }
+
+    if (matchesLevel((job.level ?? "") as Level, "entry") || matchesLevel((job.level ?? "") as Level, "mid")) {
+      score += 1; reasons.push("level fits your lanes");
+    }
+
+    if (job.date_confidence === "high") { score += 1; reasons.push("authoritative posting date"); }
+    if (job.liveness === "live") { score += 1; reasons.push("verified live"); }
+
+    return { job, score, reasons };
+  });
+
+  return ranked
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score || (b.job.posted || "").localeCompare(a.job.posted || ""))
+    .slice(0, limit);
+}
+
+// Applications that are out the door but not yet resolved — these need a nudge.
+export function getFollowUps(): App[] {
+  return (sqlite.prepare("SELECT * FROM applications ORDER BY date DESC").all() as App[]).filter((a) =>
+    /applied|aplicad|respond|interview|entrevista|screen/.test((a.status || "").toLowerCase()),
+  );
 }
 
 export function getPipeline(state: "pending" | "processed" | "all" = "pending"): Job[] {
