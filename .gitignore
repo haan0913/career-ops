@@ -6,6 +6,7 @@ data/scan-history.tsv
 data/scan-runs.tsv
 data/jobs.jsonl
 data/liveness.jsonl
+data/refresh.log
 data/jd/
 data/*.bak
 data/parser-output/**/*.json
