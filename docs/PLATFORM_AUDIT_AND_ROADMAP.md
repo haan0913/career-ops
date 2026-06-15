@@ -170,3 +170,21 @@ Change summary: Phase 0 deliverable — baseline metrics, competitive parity mat
 - After: `computeFit()` produces a **calibrated overall label** (Apply immediately → Low probability) over **separate scored components** (role, level, location, comp, freshness, liveness) each with a plain-English note; plus matched **evidence** (which of Amir's proof-point themes the JD hits), a **degree-flexibility** read ("or equivalent" → flexible), and explicit **concerns** (below $70k floor, senior reach, strict degree, out-of-lane). Grounded in the five target archetypes + proof points from modes/_profile.md — zero API cost.
 - Calibration honors the profile: a senior role with strong everything-else reads "Stretch but defensible" with a "low-probability reach" watch, not "Apply immediately". Verified in-browser across two real roles. Screenshot `roadmap8-fit-analysis.png`.
 - This is the deterministic foundation; richer LLM-written explanations remain available behind an explicit cost approval (per the user's decision).
+
+---
+
+## H. Final assessment (after items 1–8)
+
+**How close to the full vision?** The discovery→normalization→dedup→freshness→liveness→search→ranking spine now exists end-to-end and is tested (135 checks, 0 failing). For the founding user it is already a materially better daily driver than checking boards manually: one ranked apply-first queue, explained fit, honest freshness/liveness, and full-text search over the corpus. As a multi-user "job-market OS" it is still single-user and coverage is modest (45 boards + 4 searches + 7 ATS types).
+
+**Competitor parity now MET:** corpus search (incl. full-JD-body), experience-level/role/location/pay facets, fresh-first sorting, full JD in-app, saved searches driving sourcing, application pipeline with stages.
+**Where we now EXCEED incumbents:** cross-source dedup with visible source history; honest posted-vs-discovered-vs-verified dates with confidence; operationalized liveness with auto-hide; explainable, profile-grounded fit/winnability with concerns + degree-flexibility; source-contribution/health transparency; zero ad-driven ranking.
+**Still MISSING:** company pages + hiring-activity intelligence; market/comp trend analytics; alerts/notifications; outcome-learning loop (which lanes/sources convert); semantic/NL search; broader coverage (more ATS orgs, more boards).
+
+**Largest coverage gap:** breadth of monitored employers — 20/45 boards produce nothing in-lane and only ~8 sources have ever contributed; the unique-inventory engine is sound but under-fed. **Largest product weakness:** no learning from outcomes yet, so ranking can't improve from interviews/responses.
+
+**Recommended next:** (a) expand ATS/board coverage and use /sources unique-contribution to prune dead weight; (b) company pages aggregating the canonical store; (c) outcome-learning loop feeding the deterministic fit weights; (d) alerts on strong new matches / tracked-company activity.
+
+**Unverified claims:** competitor parity matrix (§A) was built from product knowledge, not re-crawled this session; liveness verdicts depend on running `liveness-sweep.mjs` on a cadence (only a sample re-verified here); the Go-toolchain corruption on the host is environmental (reinstall chip spawned), unrelated to project code.
+
+**Session delta:** 8 roadmap items shipped on `feat/sourcing-freshness` (pushed to fork haan0913). New engine modules: location, canonical, jobs-store, jobs-backfill, source-registry, liveness-store, liveness-sweep. New dashboard surfaces: command-center home, /search, /sources, drawer fit-analysis + posting-timeline + source-history, liveness auto-hide. Tests 94→135, 0 failing.
