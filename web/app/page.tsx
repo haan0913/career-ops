@@ -16,6 +16,9 @@ export default async function Overview() {
   const pending = getPipeline("pending");
   const deadHidden = pending.filter((j) => j.liveness === "dead").length;
   const reg = await getRegistry();
+  // Distinguish "registry came back empty" (subprocess unavailable) from a
+  // genuine all-fresh state, so the panel never claims health it didn't check.
+  const registryOk = reg.summary.providers > 0;
   const staleSources = reg.providers.filter((p) => p.health === "stale");
   const liteJobs = pending.map((j) => ({ url: j.url, company: j.company, title: j.title, discovered: j.discovered }));
 
@@ -116,9 +119,11 @@ export default async function Overview() {
                 tone={staleSources.length ? "amber" : "ok"}
                 icon={Radio}
                 label={
-                  staleSources.length
-                    ? `${staleSources.length} source${staleSources.length === 1 ? "" : "s"} stale: ${staleSources.map((p) => p.id).slice(0, 2).join(", ")}`
-                    : "All active sources fresh"
+                  !registryOk
+                    ? "Source health unavailable — open Sources to refresh"
+                    : staleSources.length
+                      ? `${staleSources.length} source${staleSources.length === 1 ? "" : "s"} stale: ${staleSources.map((p) => p.id).slice(0, 2).join(", ")}`
+                      : "All active sources fresh"
                 }
               />
               <Link href="/sources" className="block pt-1 text-xs text-zinc-500 hover:text-zinc-300">

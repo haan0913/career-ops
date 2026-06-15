@@ -213,13 +213,15 @@ function syncPipeline() {
     if (m) {
       const md = meta.get(m[1]) || { location: "", source: "" };
       const sc = snapCols(m[1]);
-      ins.run(
+      const r = ins.run(
         m[1], m[2], m[3], m[4] ?? "", "pending", null, null,
         md.location || sc.location, md.source || domainOf(m[1]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
         ...extraCols(m[1], m[4] ?? ""),
       );
-      indexFts(m[1], m[2], m[3]);
+      // Only index FTS when the job row was actually inserted — a duplicate URL
+      // is IGNOREd by `jobs` (UNIQUE), so indexing it would double its search hits.
+      if (r.changes > 0) indexFts(m[1], m[2], m[3]);
       continue;
     }
     // Processed: - [x] #NNN | url | company | role | score/5 | PDF ...
@@ -227,13 +229,13 @@ function syncPipeline() {
     if (m) {
       const md = meta.get(m[2]) || { location: "", source: "" };
       const sc = snapCols(m[2]);
-      ins.run(
+      const r = ins.run(
         m[2], m[3], m[4], "", "processed", Number(m[1]), m[5],
         md.location || sc.location, md.source || domainOf(m[2]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
         ...extraCols(m[2], ""),
       );
-      indexFts(m[2], m[3], m[4]);
+      if (r.changes > 0) indexFts(m[2], m[3], m[4]);
       continue;
     }
   }
