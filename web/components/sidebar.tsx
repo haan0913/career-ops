@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, Search, Compass, Briefcase, KanbanSquare, BarChart3, Settings } from "lucide-react";
+import { LayoutDashboard, Inbox, Search, Compass, Briefcase, KanbanSquare, BarChart3, Radio, Settings } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const nav = [
   { href: "/discover", label: "Discover", icon: Compass },
   { href: "/applications", label: "Applications", icon: Briefcase },
   { href: "/board", label: "Board", icon: KanbanSquare },
+  { href: "/sources", label: "Sources", icon: Radio },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

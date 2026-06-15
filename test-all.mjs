@@ -229,6 +229,17 @@ try {
   t(!diffCity.merged && idx2.jobs.length === 3, 'store: same JD+title, different city → not merged (Brex guard)');
 } catch (e) { fail(`canonical/store unit tests crashed: ${e.message}`); }
 
+try {
+  const { buildRegistry } = await import(pathToFileURL(join(ROOT, 'source-registry.mjs')).href);
+  const t = (cond, msg) => cond ? pass(msg) : fail(msg);
+  const reg = buildRegistry();
+  t(Array.isArray(reg.providers) && Array.isArray(reg.boards), 'registry: returns providers + boards arrays');
+  t(typeof reg.summary.canonicalJobs === 'number', 'registry: summary has canonicalJobs count');
+  t(reg.providers.every(p => ['healthy', 'degraded', 'stale'].includes(p.health)), 'registry: every provider has a valid health status');
+  t(reg.boards.every(b => ['productive', 'stale', 'no-matches'].includes(b.status)), 'registry: every board has a valid status');
+  t(reg.providers.every(p => p.unique <= p.contributed), 'registry: unique never exceeds contributed');
+} catch (e) { fail(`source-registry unit tests crashed: ${e.message}`); }
+
 // ── 4. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {

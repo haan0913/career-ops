@@ -373,6 +373,7 @@ function guardStatusFor(code) {
 }
 
 async function main() {
+  const startedAt = Date.now();
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const verify = args.includes('--verify');
@@ -616,6 +617,21 @@ async function main() {
     for (const [status, group] of byStatus) {
       appendToScanHistory(group, date, status);
     }
+  }
+
+  // 6c. Scan-run log — one row per run so the Sources page can show last-scan
+  // time, run-over-run volume, and which sources errored. Append-only TSV.
+  if (!dryRun) {
+    const SCAN_RUNS_PATH = 'data/scan-runs.tsv';
+    const errorSources = [...new Set(errors.map((e) => e.company))].join(';');
+    if (!existsSync(SCAN_RUNS_PATH)) {
+      writeFileSync(SCAN_RUNS_PATH, 'ts\tdate\tcompanies\tfound\tadded\tmerged\tdupes\terrors\tduration_ms\terror_sources\n', 'utf-8');
+    }
+    appendFileSync(
+      SCAN_RUNS_PATH,
+      `${new Date().toISOString()}\t${date}\t${targets.length}\t${totalFound}\t${verifiedOffers.length}\t${totalMerged}\t${totalDupes}\t${errors.length}\t${Date.now() - startedAt}\t${errorSources}\n`,
+      'utf-8',
+    );
   }
 
   // 7. Print summary

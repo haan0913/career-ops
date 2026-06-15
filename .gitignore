@@ -3,6 +3,7 @@ cv.md
 data/applications.md
 data/pipeline.md
 data/scan-history.tsv
+data/scan-runs.tsv
 data/jobs.jsonl
 data/jd/
 data/*.bak
