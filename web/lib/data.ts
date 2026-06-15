@@ -41,6 +41,8 @@ export type Job = {
   reposted: number | null;
   discovered: string | null;
   date_confidence: string | null;
+  fit_score: number | null;
+  fit_label: string | null;
 };
 
 // Re-read the md/TSV source of truth into the SQLite projection. Call ONCE per request.

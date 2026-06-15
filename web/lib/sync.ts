@@ -4,6 +4,7 @@ import path from "path";
 import { DATA, JD_DIR } from "./paths";
 import { sqlite, ftsAvailable } from "@/db";
 import { classifyLevel } from "./level";
+import { computeFit } from "./fit";
 
 type Snapshot = {
   url: string;
@@ -165,8 +166,19 @@ function syncPipeline() {
   const canon = loadCanonicalSources();
   const liveness = loadLivenessMap();
   const ins = sqlite.prepare(
-    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json,liveness,last_verified,reposted,discovered,date_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT OR IGNORE INTO jobs (url,company,title,posted,state,report_num,score,location,source,description,salary,logo,apply_url,publisher,level,sources_count,sources_json,liveness,last_verified,reposted,discovered,date_confidence,fit_score,fit_label) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
   );
+  // Precompute the deterministic fit from the FULL JD at sync time so cards can
+  // show the label and the pipeline can sort by it (the drawer recomputes live
+  // with the lane signal for the detailed panel). No laneSignal here — it's a
+  // small dormant nudge and avoids a data.ts↔sync.ts cycle.
+  const fitCols = (title: string, url: string, location: string, salary: string, level: string, posted: string): [number, string] => {
+    const f = computeFit(
+      { title, location, salary, level, posted, liveness: liveness.get(url)?.status ?? null },
+      snaps.get(url)?.descriptionHtml ?? "",
+    );
+    return [f.score, f.overall];
+  };
   const insFts = ftsAvailable
     ? sqlite.prepare("INSERT INTO jobs_fts (url,title,company,body) VALUES (?,?,?,?)")
     : null;
@@ -218,6 +230,7 @@ function syncPipeline() {
         md.location || sc.location, md.source || domainOf(m[1]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[3], m[1]),
         ...extraCols(m[1], m[4] ?? ""),
+        ...fitCols(m[3], m[1], md.location || sc.location, sc.salary, levelFor(m[3], m[1]), m[4] ?? ""),
       );
       // Only index FTS when the job row was actually inserted — a duplicate URL
       // is IGNOREd by `jobs` (UNIQUE), so indexing it would double its search hits.
@@ -234,6 +247,7 @@ function syncPipeline() {
         md.location || sc.location, md.source || domainOf(m[2]),
         sc.description, sc.salary, sc.logo, sc.apply_url, sc.publisher, levelFor(m[4], m[2]),
         ...extraCols(m[2], ""),
+        ...fitCols(m[4], m[2], md.location || sc.location, sc.salary, levelFor(m[4], m[2]), ""),
       );
       if (r.changes > 0) indexFts(m[2], m[3], m[4]);
       continue;

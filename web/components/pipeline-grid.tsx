@@ -42,6 +42,8 @@ export type CardJob = {
   reposted: number | null;
   discovered: string | null;
   date_confidence: string | null;
+  fit_score: number | null;
+  fit_label: string | null;
 };
 
 type ModeFilter = "all" | "Remote" | "Hybrid" | "Onsite";
@@ -59,6 +61,7 @@ export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal
   const [salaryMin, setSalaryMin] = useState(0);
   const [company, setCompany] = useState("all");
   const [showClosed, setShowClosed] = useState(false);
+  const [sortByFit, setSortByFit] = useState(false);
 
   const companies = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.company).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
@@ -92,10 +95,11 @@ export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal
 
   // Dead listings are hidden from the default view (reversible — toggle to show).
   const deadHidden = useMemo(() => filteredAll.filter((j) => j.liveness === "dead").length, [filteredAll]);
-  const filtered = useMemo(
-    () => (showClosed ? filteredAll : filteredAll.filter((j) => j.liveness !== "dead")),
-    [filteredAll, showClosed],
-  );
+  const filtered = useMemo(() => {
+    const base = showClosed ? filteredAll : filteredAll.filter((j) => j.liveness !== "dead");
+    if (!sortByFit) return base;
+    return [...base].sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1));
+  }, [filteredAll, showClosed, sortByFit]);
 
   const anyActive = !!q || role !== "all" || level !== "all" || salaryMin > 0 || mode !== "all" || company !== "all" || maxAge > 0;
   const clearAll = () => {
@@ -132,15 +136,25 @@ export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal
         total={jobs.length}
       />
 
-      {deadHidden > 0 && (
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => setShowClosed((v) => !v)}
-          className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+          onClick={() => setSortByFit((v) => !v)}
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+            sortByFit ? "border-indigo-400/40 bg-indigo-500/10 text-zinc-100" : "border-white/[0.08] bg-white/[0.02] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+          }`}
         >
-          <span className="size-1.5 rounded-full bg-rose-400/80" />
-          {showClosed ? `Hide ${deadHidden} closed` : `${deadHidden} closed hidden — show`}
+          {sortByFit ? "Sorted: top fit first" : "Sort by fit"}
         </button>
-      )}
+        {deadHidden > 0 && (
+          <button
+            onClick={() => setShowClosed((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+          >
+            <span className="size-1.5 rounded-full bg-rose-400/80" />
+            {showClosed ? `Hide ${deadHidden} closed` : `${deadHidden} closed hidden — show`}
+          </button>
+        )}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="grid place-items-center rounded-xl border border-dashed border-white/[0.08] bg-zinc-900/20 p-12 text-sm text-zinc-500">
@@ -401,6 +415,7 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
+        <FitChip label={job.fit_label} score={job.fit_score} />
         <LevelBadge level={job.level} />
         {job.salary && <SalaryChip salary={job.salary} />}
         <LivenessChip liveness={job.liveness} />
@@ -427,6 +442,24 @@ function JobCard({ job, onOpen }: { job: CardJob; onOpen: () => void }) {
         {job.source && <span className="shrink-0 font-mono text-[10px] text-zinc-600">{job.source}</span>}
       </div>
     </button>
+  );
+}
+
+// Overall fit label, precomputed at sync. Tone tracks the calibrated label so
+// "Apply immediately" reads green and reaches/low-probability dampen.
+const FIT_TONE: Record<string, string> = {
+  "Apply immediately": "text-emerald-300 bg-emerald-500/10 ring-emerald-500/25",
+  "Strong application": "text-emerald-300 bg-emerald-500/10 ring-emerald-500/25",
+  "Worth applying": "text-indigo-200 bg-indigo-500/10 ring-indigo-500/25",
+  "Stretch but defensible": "text-amber-200 bg-amber-500/10 ring-amber-500/20",
+  "Low probability": "text-zinc-400 bg-white/[0.04] ring-white/10",
+};
+function FitChip({ label, score }: { label: string | null; score: number | null }) {
+  if (!label) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${FIT_TONE[label] ?? "text-zinc-400 bg-white/[0.04] ring-white/10"}`} title={`fit ${score ?? "?"}/100`}>
+      {label}
+    </span>
   );
 }
 

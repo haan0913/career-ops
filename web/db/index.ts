@@ -37,6 +37,8 @@ for (const col of [
   "reposted INTEGER", // 1 if the canonical record shows a repost (sources span >14d)
   "discovered TEXT", // when WE first saw it (scan-history first_seen) — not the posted date
   "date_confidence TEXT", // high | medium | unknown — trust in the posted date by source
+  "fit_score INTEGER", // deterministic fit 0..100, precomputed at sync from the full JD
+  "fit_label TEXT", // calibrated label (Apply immediately … Low probability)
 ]) {
   try {
     sqlite.exec(`ALTER TABLE jobs ADD COLUMN ${col}`);
