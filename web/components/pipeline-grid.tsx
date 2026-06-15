@@ -20,6 +20,7 @@ import { daysAgo, freshLabel, freshTone, workMode, modeTone, scoreTone, type Mod
 import { levelLabel, levelTone, matchesLevel, type Level } from "@/lib/level";
 import { classifyRole, roleLabel, ROLE_FAMILIES, type RoleFamily } from "@/lib/role";
 import { parseSalaryAnnualMin, SALARY_BANDS } from "@/lib/salary";
+import { computeFit } from "@/lib/fit";
 
 export type CardJob = {
   url: string;
@@ -495,6 +496,58 @@ function PostingTimeline({ job }: { job: CardJob }) {
   );
 }
 
+// Explainable fit/winnability — deterministic (no API cost). Separate scored
+// components + a calibrated label + concerns, grounded in Amir's archetypes and
+// proof points. Recomputed when the JD loads so evidence/degree reflect the body.
+function FitPanel({ job, jdHtml }: { job: CardJob; jdHtml?: string | null }) {
+  const fit = useMemo(() => computeFit(job, jdHtml), [job, jdHtml]);
+  const toneRing: Record<string, string> = {
+    good: "text-emerald-300 bg-emerald-500/10 ring-emerald-500/25",
+    ok: "text-amber-200 bg-amber-500/10 ring-amber-500/20",
+    warn: "text-rose-300 bg-rose-500/10 ring-rose-500/25",
+  };
+  const dotTone: Record<string, string> = { good: "bg-emerald-400", ok: "bg-amber-400", warn: "bg-rose-400" };
+  return (
+    <div className="mb-5 rounded-xl border border-white/[0.07] bg-zinc-900/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Fit analysis</span>
+        <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${toneRing[fit.tone]}`}>
+          {fit.overall}
+          <span className="font-mono text-[10px] opacity-70">{fit.score}</span>
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2">
+        {fit.components.map((c) => (
+          <div key={c.key} className="flex items-start gap-2 text-xs">
+            <span className={`mt-1 size-1.5 shrink-0 rounded-full ${dotTone[c.tone]}`} />
+            <span className="text-zinc-500">{c.label}:</span>
+            <span className="text-zinc-300">{c.note}</span>
+          </div>
+        ))}
+      </div>
+
+      {fit.evidence.length > 0 && (
+        <div className="mt-3 border-t border-white/[0.06] pt-2.5 text-xs">
+          <span className="text-zinc-500">Your evidence: </span>
+          <span className="text-emerald-300/90">{fit.evidence.join(" · ")}</span>
+        </div>
+      )}
+
+      {fit.degree === "flexible" && (
+        <div className="mt-2 text-xs text-emerald-300/80">✓ Degree-flexible — &ldquo;or equivalent experience&rdquo; language present.</div>
+      )}
+
+      {fit.concerns.length > 0 && (
+        <div className="mt-2 border-t border-white/[0.06] pt-2.5 text-xs">
+          <span className="text-zinc-500">Watch: </span>
+          <span className="text-amber-200/90">{fit.concerns.join(" · ")}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MetaChip({ icon: Icon, label }: { icon: typeof DollarSign; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-zinc-300 ring-1 ring-inset ring-white/10">
@@ -707,6 +760,7 @@ function JobDrawer({ job, onClose }: { job: CardJob; onClose: () => void }) {
         <PostingTimeline job={job} />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+          <FitPanel job={job} jdHtml={jd?.descriptionHtml} />
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Loading job description…
