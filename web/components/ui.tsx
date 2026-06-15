@@ -2,9 +2,7 @@ import { ReactNode } from "react";
 import { daysAgo, freshLabel, freshTone } from "@/lib/fresh";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-xl border border-white/[0.06] bg-zinc-900/40 ${className}`}>{children}</div>
-  );
+  return <div className={`surface ${className}`}>{children}</div>;
 }
 
 export function StatCard({
@@ -12,19 +10,26 @@ export function StatCard({
   value,
   sub,
   accent = "text-white",
+  icon,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   accent?: string;
+  icon?: ReactNode;
 }) {
   return (
-    <div className="group rounded-xl border border-white/[0.06] bg-zinc-900/40 p-5 transition-all duration-300 hover:border-white/[0.12] hover:bg-zinc-900/60">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className={`mt-2 font-mono text-[28px] font-semibold leading-none tabular-nums ${accent}`}>
-        {value}
+    <div className="surface surface-hover group p-5">
+      {/* faint accent wash that warms on hover */}
+      <div className="pointer-events-none absolute inset-0 rounded-[0.85rem] bg-gradient-to-br from-indigo-500/[0.06] to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</div>
+          {icon && <span className="text-zinc-600 transition-colors group-hover:text-indigo-400">{icon}</span>}
+        </div>
+        <div className={`mt-2.5 font-mono text-[30px] font-semibold leading-none tabular-nums ${accent}`}>{value}</div>
+        {sub && <div className="mt-2 text-xs text-zinc-500">{sub}</div>}
       </div>
-      {sub && <div className="mt-2 text-xs text-zinc-500">{sub}</div>}
     </div>
   );
 }
@@ -40,9 +45,10 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-white">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
+      <div className="relative">
+        <span className="absolute -left-3 top-1 h-7 w-1 rounded-full bg-gradient-to-b from-indigo-400 to-violet-500" />
+        <h1 className="text-[22px] font-semibold tracking-tight text-white">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-2xl text-sm text-zinc-500">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -88,10 +94,27 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function Bar({ value, max, tone = "bg-indigo-500" }: { value: number; max: number; tone?: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+  // Map the old solid-tone API to a richer gradient + faint glow, keeping every
+  // existing caller working without changes.
+  const grad: Record<string, string> = {
+    "bg-indigo-500": "linear-gradient(90deg,#6366f1,#a855f7)",
+    "bg-violet-500": "linear-gradient(90deg,#8b5cf6,#d946ef)",
+    "bg-sky-500": "linear-gradient(90deg,#0ea5e9,#38bdf8)",
+    "bg-emerald-500": "linear-gradient(90deg,#10b981,#34d399)",
+    "bg-lime-500": "linear-gradient(90deg,#65a30d,#a3e635)",
+    "bg-amber-500": "linear-gradient(90deg,#d97706,#fbbf24)",
+    "bg-rose-500": "linear-gradient(90deg,#e11d48,#fb7185)",
+    "bg-zinc-500": "linear-gradient(90deg,#52525b,#a1a1aa)",
+    "bg-zinc-600": "linear-gradient(90deg,#3f3f46,#71717a)",
+    "bg-zinc-700": "linear-gradient(90deg,#27272a,#52525b)",
+  };
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.04]">
-      <div className={`h-full rounded-full ${tone} transition-all duration-700`} style={{ width: `${pct}%` }} />
+      <div
+        className="h-full rounded-full transition-all duration-700"
+        style={{ width: `${pct}%`, background: grad[tone] ?? "linear-gradient(90deg,#6366f1,#a855f7)" }}
+      />
     </div>
   );
 }

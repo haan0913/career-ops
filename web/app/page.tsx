@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Zap, MapPin, AlertTriangle, Radio } from "lucide-react";
+import { ArrowUpRight, Zap, MapPin, AlertTriangle, Radio, Target, Inbox, Clock, MessageSquare } from "lucide-react";
 import { sync, getStats, getApplyQueue, getFollowUps, getPipeline, getStaleSources } from "@/lib/data";
 import { StatCard, Card, SectionHeader, StatusBadge, PageHeader, EmptyState } from "@/components/ui";
 import { ScanBar } from "@/components/scan-bar";
@@ -37,10 +37,10 @@ export default async function Overview() {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Apply-first queue" value={queue.length} sub="ranked & live" accent="text-indigo-300" />
-        <StatCard label="In pipeline" value={s.pending} sub={`${s.freshWeek} fresh this week`} />
-        <StatCard label="Follow-ups due" value={followUps.length} sub="applied, awaiting reply" accent={followUps.length ? "text-amber-300" : "text-white"} />
-        <StatCard label="Interviewing" value={s.interviewing} sub={`${s.offers} offer${s.offers === 1 ? "" : "s"}`} accent="text-emerald-300" />
+        <StatCard label="Apply-first queue" value={queue.length} sub="ranked & live" accent="text-indigo-300" icon={<Target className="size-4" />} />
+        <StatCard label="In pipeline" value={s.pending} sub={`${s.freshWeek} fresh this week`} icon={<Inbox className="size-4" />} />
+        <StatCard label="Follow-ups due" value={followUps.length} sub="applied, awaiting reply" accent={followUps.length ? "text-amber-300" : "text-white"} icon={<Clock className="size-4" />} />
+        <StatCard label="Interviewing" value={s.interviewing} sub={`${s.offers} offer${s.offers === 1 ? "" : "s"}`} accent="text-emerald-300" icon={<MessageSquare className="size-4" />} />
       </div>
 
       <div className="mt-6">
@@ -83,10 +83,12 @@ export default async function Overview() {
               </EmptyState>
             ) : (
               <ul className="divide-y divide-white/[0.04]">
-                {queue.map(({ job, reasons }) => (
+                {queue.map(({ job, reasons }, i) => (
                   <li key={job.url} className="px-4 py-3 transition-colors hover:bg-white/[0.02]">
                     <div className="flex items-start gap-3">
-                      <Zap className="mt-0.5 size-4 shrink-0 text-indigo-400" />
+                      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-indigo-500/15 font-mono text-[11px] font-semibold text-indigo-300 ring-1 ring-inset ring-indigo-500/25">
+                        {i + 1}
+                      </span>
                       <div className="min-w-0 flex-1">
                         <a href={job.apply_url || job.url} target="_blank" rel="noreferrer" className="block truncate text-sm hover:underline">
                           <span className="font-medium text-zinc-100">{job.company}</span>

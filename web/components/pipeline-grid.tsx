@@ -51,7 +51,7 @@ type AgeFilter = 0 | 7 | 30 | 90;
 type LevelFilter = "all" | "intern" | "entry" | "mid" | "senior" | "leadplus";
 type RoleFilter = RoleFamily | "all";
 
-export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal?: Record<string, number> }) {
+export function PipelineGrid({ jobs, laneSignal, hideTextFilter }: { jobs: CardJob[]; laneSignal?: Record<string, number>; hideTextFilter?: boolean }) {
   const [active, setActive] = useState<CardJob | null>(null);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ModeFilter>("all");
@@ -134,6 +134,7 @@ export function PipelineGrid({ jobs, laneSignal }: { jobs: CardJob[]; laneSignal
         clearAll={clearAll}
         count={filtered.length}
         total={jobs.length}
+        hideTextFilter={hideTextFilter}
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -231,6 +232,7 @@ function FilterBar({
   clearAll,
   count,
   total,
+  hideTextFilter,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -251,22 +253,25 @@ function FilterBar({
   clearAll: () => void;
   count: number;
   total: number;
+  hideTextFilter?: boolean;
 }) {
   return (
     <div className="mb-4 space-y-2.5 rounded-xl border border-white/[0.06] bg-zinc-900/40 p-2.5">
-      <div className="flex items-center gap-2 px-1">
-        <Search className="size-4 shrink-0 text-zinc-500" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search roles, companies, descriptions…"
-          className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
-        />
-        <span className="shrink-0 whitespace-nowrap pl-2 font-mono text-xs text-zinc-500">
-          {count}
-          <span className="text-zinc-600"> / {total}</span>
-        </span>
-      </div>
+      {!hideTextFilter && (
+        <div className="flex items-center gap-2 px-1">
+          <Search className="size-4 shrink-0 text-zinc-500" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search roles, companies, descriptions…"
+            className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
+          />
+          <span className="shrink-0 whitespace-nowrap pl-2 font-mono text-xs text-zinc-500">
+            {count}
+            <span className="text-zinc-600"> / {total}</span>
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.05] pt-2.5">
         <FacetSelect

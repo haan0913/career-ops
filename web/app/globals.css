@@ -7,24 +7,55 @@
 
 :root {
   color-scheme: dark;
+  --accent: 99 102 241; /* indigo-500 */
+  --accent-2: 168 85 247; /* violet-500 */
+  --bg: #08080b;
 }
 
 html {
-  background: #09090b;
+  background: var(--bg);
 }
 
+/* Layered aurora — pure CSS gradients (no WebGL/canvas). One slow-drifting blob
+   on a fixed pseudo-element; transform-only animation so it stays GPU-cheap and
+   never touches layout. Sits behind everything at low opacity. */
 body {
+  position: relative;
   background:
-    radial-gradient(1100px 460px at 50% -240px, rgba(99, 102, 241, 0.1), transparent 60%),
-    #09090b;
+    radial-gradient(1200px 520px at 50% -260px, rgba(99, 102, 241, 0.12), transparent 62%),
+    radial-gradient(900px 600px at 100% 0%, rgba(168, 85, 247, 0.07), transparent 55%),
+    radial-gradient(700px 700px at 0% 30%, rgba(56, 189, 248, 0.045), transparent 55%),
+    var(--bg);
   color: #f4f4f5;
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+body::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(124, 92, 246, 0.10), transparent 70%);
+  width: 60vw;
+  height: 60vw;
+  top: -10vw;
+  left: 55vw;
+  filter: blur(20px);
+  animation: drift 34s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-14vw, 10vh, 0) scale(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+}
 
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.32);
   color: #fff;
 }
 
@@ -32,50 +63,69 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 9999px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* ── Premium surface system ───────────────────────────────────────────────
+   A hairline gradient border + a faint top sheen gives glass depth without
+   backdrop-filter (blur is expensive on long lists). Use .surface on cards. */
+.surface {
+  position: relative;
+  border-radius: 0.85rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)) padding-box,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)) border-box;
+  border: 1px solid transparent;
 }
-*::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
+.surface-hover {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, background 0.3s ease;
 }
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+.surface-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
+
+/* Gradient text for hero numerals. */
+.text-gradient {
+  background: linear-gradient(135deg, #fff 0%, #c7d2fe 55%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.text-gradient-accent {
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Soft accent glow for emphasis chips/rings. */
+.glow-accent { box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25), 0 8px 26px -10px rgba(99, 102, 241, 0.4); }
 
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
-.animate-fadeUp {
-  animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+.animate-fadeUp { animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Staggered reveal — children fade up in sequence. Applied via inline delay. */
+.stagger > * { animation: fadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
 }
 
-/* Rendered job-description HTML (sanitized server-side in jd-fetch.mjs) */
-.jd-prose {
-  color: #d4d4d8;
-  font-size: 14px;
-  line-height: 1.7;
+/* Donut/sparkline draw-in (one-time, transform/dash only). */
+@keyframes dash {
+  from { stroke-dashoffset: var(--dash-from); }
+  to { stroke-dashoffset: var(--dash-to); }
 }
-/* Scannable "highlights" summary box (Responsibilities / Qualifications / Benefits) */
+.animate-dash { animation: dash 1s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Rendered job-description HTML (sanitized server-side in jd-fetch.mjs) */
+.jd-prose { color: #d4d4d8; font-size: 14px; line-height: 1.7; }
 .jd-prose .jd-highlights {
   margin: 0 0 1.4em;
   padding: 0.4em 1.1em 1em;
@@ -83,64 +133,23 @@ body {
   border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.02);
 }
-.jd-prose .jd-highlights h3:first-child {
-  margin-top: 0.7em;
+.jd-prose .jd-highlights h3:first-child { margin-top: 0.7em; }
+.jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 {
+  color: #fff; font-weight: 600; margin: 1.3em 0 0.5em; line-height: 1.3;
 }
-.jd-prose h1,
-.jd-prose h2,
-.jd-prose h3,
-.jd-prose h4 {
-  color: #fff;
-  font-weight: 600;
-  margin: 1.3em 0 0.5em;
-  line-height: 1.3;
-}
-.jd-prose h1 {
-  font-size: 1.2rem;
-}
-.jd-prose h2 {
-  font-size: 1.05rem;
-}
-.jd-prose h3 {
-  font-size: 0.95rem;
-}
-.jd-prose p {
-  margin: 0.7em 0;
-}
-.jd-prose ul,
-.jd-prose ol {
-  margin: 0.7em 0;
-  padding-left: 1.4em;
-}
-.jd-prose ul {
-  list-style: disc;
-}
-.jd-prose ol {
-  list-style: decimal;
-}
-.jd-prose li {
-  margin: 0.3em 0;
-}
-.jd-prose a {
-  color: #818cf8;
-  text-decoration: underline;
-}
-.jd-prose strong,
-.jd-prose b {
-  color: #fff;
-  font-weight: 600;
-}
-.jd-prose hr {
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  margin: 1.3em 0;
-}
-.jd-prose pre.jd-plain,
-pre.jd-plain {
-  white-space: pre-wrap;
-  word-wrap: break-word;
+.jd-prose h1 { font-size: 1.2rem; }
+.jd-prose h2 { font-size: 1.05rem; }
+.jd-prose h3 { font-size: 0.95rem; }
+.jd-prose p { margin: 0.7em 0; }
+.jd-prose ul, .jd-prose ol { margin: 0.7em 0; padding-left: 1.4em; }
+.jd-prose ul { list-style: disc; }
+.jd-prose ol { list-style: decimal; }
+.jd-prose li { margin: 0.3em 0; }
+.jd-prose a { color: #818cf8; text-decoration: underline; }
+.jd-prose strong, .jd-prose b { color: #fff; font-weight: 600; }
+.jd-prose hr { border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 1.3em 0; }
+.jd-prose pre.jd-plain, pre.jd-plain {
+  white-space: pre-wrap; word-wrap: break-word;
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 14px;
-  line-height: 1.7;
-  color: #d4d4d8;
+  font-size: 14px; line-height: 1.7; color: #d4d4d8;
 }

@@ -177,6 +177,16 @@ export function setLastVisit(ts: number): void {
   sqlite.prepare("INSERT INTO meta (key,value) VALUES ('last_visit',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(ts));
 }
 
+// Distribution of the precomputed fit label across the live pipeline.
+export function getFitDistribution(): { label: string; count: number }[] {
+  const order = ["Apply immediately", "Strong application", "Worth applying", "Stretch but defensible", "Low probability"];
+  const rows = sqlite
+    .prepare("SELECT fit_label AS label, COUNT(*) AS count FROM jobs WHERE state='pending' AND fit_label IS NOT NULL GROUP BY fit_label")
+    .all() as { label: string; count: number }[];
+  const map = new Map(rows.map((r) => [r.label, r.count]));
+  return order.filter((l) => map.has(l)).map((l) => ({ label: l, count: map.get(l)! }));
+}
+
 // Market intelligence — aggregate cross-sectional view of what the market is
 // hiring across the corpus, plus a discovery-volume trend from scan runs. The
 // honest caveat (like outcome learning): trends need time-series; with only a

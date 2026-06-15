@@ -44,7 +44,7 @@ export default async function SearchPage({
             <span className="text-zinc-300">{query}</span>
             {hasExpansion(query) && <span className="text-indigo-300/70"> · including related terms (e.g. acronyms, synonyms)</span>}
           </p>
-          <PipelineGrid jobs={results} laneSignal={laneSignal} />
+          <PipelineGrid jobs={results} laneSignal={laneSignal} hideTextFilter />
         </>
       )}
     </div>
