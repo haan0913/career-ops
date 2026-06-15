@@ -177,6 +177,84 @@ export function setLastVisit(ts: number): void {
   sqlite.prepare("INSERT INTO meta (key,value) VALUES ('last_visit',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(ts));
 }
 
+// Market intelligence — aggregate cross-sectional view of what the market is
+// hiring across the corpus, plus a discovery-volume trend from scan runs. The
+// honest caveat (like outcome learning): trends need time-series; with only a
+// few scans so far, the trend is labeled early.
+export type MarketIntel = {
+  roleDemand: { label: string; count: number }[];
+  compBands: { label: string; count: number }[];
+  geoSplit: { label: string; count: number }[];
+  discoveryTrend: { date: string; added: number }[];
+  withSalary: number;
+  total: number;
+};
+
+function geoBucket(loc: string): string {
+  const l = (loc || "").toLowerCase();
+  // Aligned with the engine's NYC detection (location.mjs NYC_RE): city, metro
+  // towns, and a NY-state suffix all count as NYC metro.
+  if (/new york|nyc|manhattan|brooklyn|queens|jersey city|hoboken|stamford|white plains|, ?ny\b/.test(l)) return "NYC metro";
+  if (/chicago|, ?il\b/.test(l)) return "Chicago";
+  if (/remote/.test(l) && /\b(us|united states|u\.s|americas)\b/.test(l)) return "Remote-US";
+  if (/remote/.test(l)) return "Remote (other)";
+  return "Other / onsite";
+}
+
+export function getMarketIntel(): MarketIntel {
+  const jobs = sqlite.prepare("SELECT title, salary, location FROM jobs WHERE state='pending'").all() as {
+    title: string;
+    salary: string;
+    location: string;
+  }[];
+
+  const roleMap = new Map<string, number>();
+  const geoMap = new Map<string, number>();
+  const bandMap = new Map<string, number>();
+  const BANDS: [string, number, number][] = [
+    ["< $70k", 0, 70_000],
+    ["$70–100k", 70_000, 100_000],
+    ["$100–130k", 100_000, 130_000],
+    ["$130k+", 130_000, Infinity],
+  ];
+  let withSalary = 0;
+  for (const j of jobs) {
+    const r = roleLabel(classifyRole(j.title));
+    roleMap.set(r, (roleMap.get(r) || 0) + 1);
+    const g = geoBucket(j.location);
+    geoMap.set(g, (geoMap.get(g) || 0) + 1);
+    const pay = parseSalaryAnnualMin(j.salary);
+    if (pay !== null) {
+      withSalary++;
+      const band = BANDS.find(([, lo, hi]) => pay >= lo && pay < hi);
+      if (band) bandMap.set(band[0], (bandMap.get(band[0]) || 0) + 1);
+    }
+  }
+
+  // Discovery volume per scan run (added column), most recent last.
+  const trend: { date: string; added: number }[] = [];
+  const f = path.join(DATA, "scan-runs.tsv");
+  if (existsSync(f)) {
+    for (const line of readFileSync(f, "utf-8").split("\n").slice(1)) {
+      const c = line.split("\t");
+      if (!c[1]) continue;
+      trend.push({ date: c[1], added: Number(c[4]) || 0 });
+    }
+  }
+
+  const sortDesc = (m: Map<string, number>) =>
+    [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+
+  return {
+    roleDemand: sortDesc(roleMap),
+    compBands: BANDS.map(([label]) => ({ label, count: bandMap.get(label) || 0 })),
+    geoSplit: sortDesc(geoMap),
+    discoveryTrend: trend.slice(-12),
+    withSalary,
+    total: jobs.length,
+  };
+}
+
 // In-process source freshness for the command center — reads scan-history.tsv
 // directly instead of spawning source-registry.mjs on every home load (the
 // full registry still powers /sources). Returns providers not seen in `days`.
