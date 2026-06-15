@@ -198,6 +198,11 @@ try {
   t(locationVerdict('Sofia, Bulgaria').verdict === 'reject', 'verdict: Sofia/Bulgaria rejected');
   t(locationVerdict('Bucharest, Romania').verdict === 'reject', 'verdict: Bucharest/Romania rejected');
   t(normalizeLocation('Lagos, Nigeria').group === 'foreign', 'location: Lagos/Nigeria rejected');
+  t(locationVerdict('Phnom Penh, Cambodia').verdict === 'reject', 'verdict: Phnom Penh/Cambodia rejected (was a false-positive)');
+  t(locationVerdict('Kyiv, Ukraine').verdict === 'reject', 'verdict: Kyiv/Ukraine rejected');
+  t(locationVerdict('Bristol, England').verdict === 'reject', 'verdict: Bristol/England rejected (UK gap)');
+  t(locationVerdict('Cardiff, Wales').verdict === 'reject', 'verdict: Cardiff/Wales rejected');
+  t(locationVerdict('TLV').verdict === 'reject', 'verdict: TLV (Tel Aviv) rejected');
   t(locationVerdict('Remote - LATAM').verdict === 'reject', 'verdict: Remote LATAM rejected');
   t(locationVerdict('New York / London').verdict === 'pass', 'verdict: mixed NY/London passes');
   t(locationVerdict('Remote').verdict === 'defer', 'verdict: ambiguous Remote defers');
