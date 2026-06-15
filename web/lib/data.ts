@@ -160,6 +160,72 @@ export function getLaneSignal(): Record<string, number> {
   return out;
 }
 
+// Company intelligence — aggregate the pipeline + applications by employer.
+export type CompanyRow = { company: string; openings: number; fresh: number; applied: number };
+
+export function getCompanies(): CompanyRow[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT j.company AS company,
+              COUNT(*) AS openings,
+              SUM(CASE WHEN j.liveness='dead' THEN 0 ELSE 1 END) AS live
+         FROM jobs j WHERE j.company != '' GROUP BY j.company`,
+    )
+    .all() as { company: string; openings: number; live: number }[];
+  const jobs = sqlite.prepare("SELECT company, posted FROM jobs WHERE company != ''").all() as { company: string; posted: string }[];
+  const applied = sqlite.prepare("SELECT company FROM applications").all() as { company: string }[];
+  const appliedByCo = new Map<string, number>();
+  for (const a of applied) {
+    const k = (a.company || "").toLowerCase();
+    appliedByCo.set(k, (appliedByCo.get(k) || 0) + 1);
+  }
+  const freshByCo = new Map<string, number>();
+  for (const j of jobs) {
+    const d = daysAgo(j.posted);
+    if (d !== null && d <= 7) freshByCo.set(j.company, (freshByCo.get(j.company) || 0) + 1);
+  }
+  return rows
+    .map((r) => ({
+      company: r.company,
+      openings: r.openings,
+      fresh: freshByCo.get(r.company) || 0,
+      applied: appliedByCo.get(r.company.toLowerCase()) || 0,
+    }))
+    .sort((a, b) => b.openings - a.openings || a.company.localeCompare(b.company));
+}
+
+export type CompanyDetail = {
+  company: string;
+  openings: Job[];
+  roleMix: { role: string; count: number }[];
+  sources: string[];
+  applications: App[];
+};
+
+export function getCompany(name: string): CompanyDetail | null {
+  const openings = sqlite
+    .prepare("SELECT * FROM jobs WHERE LOWER(company) = LOWER(?) ORDER BY (posted='') ASC, posted DESC")
+    .all(name) as Job[];
+  const applications = sqlite
+    .prepare("SELECT * FROM applications WHERE LOWER(company) = LOWER(?) ORDER BY date DESC")
+    .all(name) as App[];
+  if (openings.length === 0 && applications.length === 0) return null;
+  const company = openings[0]?.company || applications[0]?.company || name;
+  const roleCounts = new Map<string, number>();
+  for (const j of openings) {
+    const r = roleLabel(classifyRole(j.title));
+    roleCounts.set(r, (roleCounts.get(r) || 0) + 1);
+  }
+  const sources = [...new Set(openings.map((j) => j.source).filter(Boolean) as string[])];
+  return {
+    company,
+    openings,
+    roleMix: [...roleCounts.entries()].map(([role, count]) => ({ role, count })).sort((a, b) => b.count - a.count),
+    sources,
+    applications,
+  };
+}
+
 export function getPipeline(state: "pending" | "processed" | "all" = "pending"): Job[] {
   if (state === "all") {
     return sqlite.prepare("SELECT * FROM jobs ORDER BY (posted='') ASC, posted DESC").all() as Job[];
