@@ -192,7 +192,7 @@ try {
   t(normalizeLocation('Remote - APAC').group === 'remote-foreign', 'location: Remote APAC is foreign');
   t(normalizeLocation('London, United Kingdom').group === 'foreign', 'location: London is foreign');
   t(normalizeLocation('Austin, TX').group === 'us-other', 'location: Austin is us-other');
-  t(normalizeLocation('Remote').group === 'unknown', 'location: bare Remote defers to backstop');
+  t(normalizeLocation('Remote').group === 'remote-unknown', 'location: bare Remote → remote-unknown (inclusive)');
   t(normalizeLocation('Bengaluru, India').group === 'foreign', 'location: Bengaluru not passed by "US" substring');
   t(normalizeLocation('Sofia, Bulgaria').group === 'foreign', 'location: Sofia/Bulgaria rejected (was a false-positive)');
   t(locationVerdict('Sofia, Bulgaria').verdict === 'reject', 'verdict: Sofia/Bulgaria rejected');
@@ -205,7 +205,19 @@ try {
   t(locationVerdict('TLV').verdict === 'reject', 'verdict: TLV (Tel Aviv) rejected');
   t(locationVerdict('Remote - LATAM').verdict === 'reject', 'verdict: Remote LATAM rejected');
   t(locationVerdict('New York / London').verdict === 'pass', 'verdict: mixed NY/London passes');
-  t(locationVerdict('Remote').verdict === 'defer', 'verdict: ambiguous Remote defers');
+  // Allowlist-first model — bare remote is inclusive (US-HQ source assumption).
+  t(locationVerdict('Remote').verdict === 'pass', 'verdict: bare Remote passes (inclusive)');
+  t(normalizeLocation('Remote').group === 'remote-unknown', 'location: bare Remote → remote-unknown');
+  // The flip: comma-bearing places with NO US signal reject WITHOUT enumeration.
+  t(locationVerdict('Tbilisi, Georgia').verdict === 'reject', 'allowlist: country Georgia rejected (not US state)');
+  t(locationVerdict('Someplace, Faketopia').verdict === 'reject', 'allowlist: unlisted foreign place rejected without enumeration');
+  t(locationVerdict('Atlanta, GA').verdict === 'reject', 'allowlist: Atlanta GA is US but not a target lane → reject');
+  t(normalizeLocation('Atlanta, GA').group === 'us-other', 'allowlist: Atlanta GA → us-other');
+  // Full US state names must be recognized (were a false-reject risk).
+  t(normalizeLocation('Portland, Oregon').group === 'us-other', 'allowlist: full state name (Oregon) recognized as US');
+  t(normalizeLocation('Austin, Texas').group === 'us-other', 'allowlist: full state name (Texas) recognized as US');
+  t(locationVerdict('Remote - US').verdict === 'pass', 'allowlist: Remote-US passes');
+  t(locationVerdict('San Francisco, CA, New York, NY, or Remote').verdict === 'pass', 'allowlist: multi-loc with NYC passes');
 } catch (e) { fail(`location unit tests crashed: ${e.message}`); }
 
 try {

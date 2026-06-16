@@ -153,10 +153,10 @@ function buildLocationFilter(locationFilter) {
   if (!locationFilter) return () => true;
   const allow = (locationFilter.allow || []).map(k => k.toLowerCase());
   const block = (locationFilter.block || []).map(k => k.toLowerCase());
-  // Structured pass: `groups` in portals.yml location_filter (default: the
-  // founding user's three lanes). The substring allow/block list below stays
-  // as the backstop for strings the model can't classify.
-  const groups = locationFilter.groups || ['nyc', 'remote-us', 'chicago'];
+  // Structured (allowlist-first) pass: `groups` in portals.yml location_filter,
+  // else locationVerdict's default (the three lanes + inclusive bare-remote).
+  // The substring allow/block list stays as the backstop for ambiguous strings.
+  const groups = locationFilter.groups; // undefined → locationVerdict uses its default
 
   return (location) => {
     if (!location) return true;

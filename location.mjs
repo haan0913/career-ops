@@ -40,10 +40,21 @@ const NYC_RE = /\bnew york\b|\bnyc\b|\bmanhattan\b|\bbrooklyn\b|\bqueens\b|\bjer
 const CHICAGO_RE = /\bchicago\b|, ?il\b/;
 const REMOTE_RE = /\bremote\b|\banywhere\b|\bwork from home\b|\bwfh\b|\bdistributed\b/;
 const HYBRID_RE = /\bhybrid\b/;
-const US_RE = /\bunited states\b|\busa\b|\bu\.s\.?a?\.?\b|\bus\b(?![a-z])|\bus-?based\b|\bnationwide\b/;
 
-// US state abbreviations + a few major city names → treat as US even without "US" in the text.
-const US_HINT_RE = /, ?(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b|\b(boston|austin|seattle|denver|atlanta|dallas|houston|miami|san francisco|los angeles|washington,? d\.?c\.?|philadelphia|phoenix|charlotte|salt lake)\b/;
+// ── US signal detection ───────────────────────────────────────────────────
+// The model is ALLOWLIST-FIRST: a location passes only when it carries a
+// positive US signal. So this set must be thorough — country/"US", state
+// abbreviations, FULL state names, and major metros.
+const US_RE = /\bunited states\b|\busa\b|\bu\.s\.?a?\.?\b|\bus\b(?![a-z])|\bus-?based\b|\bnationwide\b/;
+const US_STATE_ABBR = /,\s?(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/;
+// Full state names — "georgia" deliberately OMITTED (country collision; US
+// Georgia is caught by ", GA" / "Atlanta").
+const US_STATE_FULL = /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|north carolina|south carolina|north dakota|south dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|district of columbia)\b/;
+const US_CITY = /\b(boston|austin|seattle|denver|atlanta|dallas|houston|miami|san francisco|los angeles|san diego|san jose|philadelphia|phoenix|charlotte|salt lake|nashville|columbus|indianapolis|fort worth|jacksonville|detroit|memphis|baltimore|milwaukee|albuquerque|sacramento|kansas city|raleigh|omaha|minneapolis|tampa|cleveland|pittsburgh|cincinnati|st\.? louis|new orleans)\b/;
+
+function hasUsSignal(lower) {
+  return US_RE.test(lower) || US_STATE_ABBR.test(lower) || US_STATE_FULL.test(lower) || US_CITY.test(lower);
+}
 
 export function normalizeLocation(raw) {
   const text = String(raw || '').trim();
@@ -57,32 +68,36 @@ export function normalizeLocation(raw) {
   }
   const isNyc = NYC_RE.test(lower);
   const isChi = CHICAGO_RE.test(lower);
-  const isUs = isNyc || isChi || US_RE.test(lower) || US_HINT_RE.test(lower);
+  const us = isNyc || isChi || hasUsSignal(lower);
 
-  if (foreign && !isUs) {
-    out.geo = foreign;
-    out.group = out.remote ? 'remote-foreign' : 'foreign';
-    return out;
-  }
-  // Mixed (e.g. "New York / London") counts as US-reachable; keep the US group.
+  // 1. Target lanes (a US signal anywhere in a multi-location string wins).
   if (isNyc) { out.geo = 'us'; out.city = 'New York'; out.state = 'NY'; out.group = 'nyc'; return out; }
   if (isChi) { out.geo = 'us'; out.city = 'Chicago'; out.state = 'IL'; out.group = 'chicago'; return out; }
-  if (out.remote && isUs) { out.geo = 'us'; out.group = 'remote-us'; return out; }
-  if (out.remote && !foreign && !isUs) {
-    // Bare "Remote" with no geography: ambiguous — leave for the backstop list.
-    out.group = 'unknown';
-    return out;
-  }
-  if (isUs) { out.geo = 'us'; out.group = 'us-other'; return out; }
+  // 2. Known foreign (incl. "Remote - EMEA") that carries no US signal → reject.
+  if (foreign && !us) { out.geo = foreign; out.group = out.remote ? 'remote-foreign' : 'foreign'; return out; }
+  // 3. Remote with a US signal → the prime lane.
+  if (out.remote && us) { out.geo = 'us'; out.group = 'remote-us'; return out; }
+  // 4. Bare "Remote"/"Anywhere" with no geography → inclusive: our sources are
+  //    US-HQ ATS boards, so an unqualified remote role is very likely US-remote.
+  if (out.remote && !us) { out.group = 'remote-unknown'; return out; }
+  // 5. Onsite US (a state/metro but not a target lane).
+  if (us) { out.geo = 'us'; out.group = 'us-other'; return out; }
+  // 6. ALLOWLIST FLIP — a comma-bearing "City, Place" with NO US signal is a
+  //    named foreign location, even if its country isn't enumerated above.
+  //    This is what kills the foreign-leak whack-a-mole.
+  if (/,/.test(text)) { out.group = 'foreign'; return out; }
+  // 7. Truly ambiguous (e.g. "Hybrid", a single unknown token) → defer.
   return out;
 }
 
+const DEFAULT_WANTED = ['nyc', 'remote-us', 'chicago', 'remote-unknown'];
+
 /**
- * Build a structured location predicate from a list of wanted groups.
- * Returns null verdicts as 'defer' so the caller can fall back to the
- * substring allow/block backstop for unknowns.
+ * Structured location predicate. 'pass' for target lanes (+ inclusive bare
+ * remote), 'reject' for classified-but-unwanted (foreign / us-other), 'defer'
+ * only for genuinely ambiguous strings so the substring backstop can decide.
  */
-export function locationVerdict(raw, wantedGroups = ['nyc', 'remote-us', 'chicago']) {
+export function locationVerdict(raw, wantedGroups = DEFAULT_WANTED) {
   const n = normalizeLocation(raw);
   if (!n.raw) return { verdict: 'defer', norm: n };          // missing data → caller policy
   if (n.group === 'unknown') return { verdict: 'defer', norm: n };
