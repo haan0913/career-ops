@@ -21,6 +21,7 @@ import { levelLabel, levelTone, matchesLevel, type Level } from "@/lib/level";
 import { classifyRole, roleLabel, ROLE_FAMILIES, type RoleFamily } from "@/lib/role";
 import { parseSalaryAnnualMin, SALARY_BANDS } from "@/lib/salary";
 import { computeFit } from "@/lib/fit";
+import { applyKit } from "@/lib/applykit";
 
 export type CardJob = {
   url: string;
@@ -536,6 +537,43 @@ function PostingTimeline({ job }: { job: CardJob }) {
 
 // Explainable fit/winnability — deterministic (no API cost). Separate scored
 // components + a calibrated label + concerns, grounded in Amir's archetypes and
+// Apply kit — deterministic application guidance (résumé variant + proof points
+// + title to mirror) from the role archetype. The bridge from "fits" to "apply".
+function ApplyKitPanel({ job, jdHtml }: { job: CardJob; jdHtml?: string | null }) {
+  const kit = useMemo(() => applyKit(job, jdHtml), [job, jdHtml]);
+  return (
+    <div className="mb-5 rounded-xl border border-indigo-400/15 bg-indigo-500/[0.04] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium uppercase tracking-wider text-indigo-300/80">Apply kit</span>
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs font-semibold text-indigo-200 ring-1 ring-inset ring-indigo-500/25">
+          {kit.variant} résumé
+        </span>
+      </div>
+      <p className="mt-1.5 text-xs text-zinc-500">{kit.variantWhy}.</p>
+
+      <div className="mt-3 text-xs">
+        <span className="text-zinc-500">Mirror the title: </span>
+        <span className="font-medium text-zinc-200">{kit.titleMirror}</span>
+        {kit.aiLeaning && <span className="ml-2 rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase text-violet-300 ring-1 ring-inset ring-violet-500/25">AI-leaning</span>}
+      </div>
+
+      <div className="mt-3 border-t border-white/[0.06] pt-2.5">
+        <div className="text-[11px] uppercase tracking-wide text-zinc-500">Lead with</div>
+        <ul className="mt-1.5 space-y-1">
+          {kit.emphasize.map((e, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs text-zinc-300">
+              <span className="mt-1 size-1 shrink-0 rounded-full bg-indigo-400" />
+              {e}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <p className="mt-3 text-[11px] text-zinc-600">{kit.nextStep}</p>
+    </div>
+  );
+}
+
 // proof points. Recomputed when the JD loads so evidence/degree reflect the body.
 function FitPanel({ job, jdHtml, laneSignal }: { job: CardJob; jdHtml?: string | null; laneSignal?: Record<string, number> }) {
   const fit = useMemo(() => computeFit(job, jdHtml, laneSignal), [job, jdHtml, laneSignal]);
@@ -799,6 +837,7 @@ function JobDrawer({ job, onClose, laneSignal }: { job: CardJob; onClose: () => 
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           <FitPanel job={job} jdHtml={jd?.descriptionHtml} laneSignal={laneSignal} />
+          <ApplyKitPanel job={job} jdHtml={jd?.descriptionHtml} />
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Loading job description…
